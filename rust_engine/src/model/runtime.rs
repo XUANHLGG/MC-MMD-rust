@@ -108,6 +108,16 @@ pub struct MmdModel {
     
     // VPD 骨骼姿势覆盖（骨骼索引 -> (位移, 旋转)）
     vpd_bone_overrides: HashMap<usize, (Vec3, Quat)>,
+    
+    // ======== 矩阵插值过渡 ========
+    /// 缓存的蒙皮矩阵（过渡开始时的状态）
+    transition_matrices: Vec<Mat4>,
+    /// 过渡进度（0.0 - 1.0）
+    transition_progress: f32,
+    /// 过渡时长（秒）
+    transition_duration: f32,
+    /// 是否正在过渡
+    is_transitioning: bool,
 }
 
 impl MmdModel {
@@ -163,6 +173,10 @@ impl MmdModel {
             vertex_morph_count: 0,
             gpu_morph_initialized: false,
             vpd_bone_overrides: HashMap::new(),
+            transition_matrices: Vec::new(),
+            transition_progress: 0.0,
+            transition_duration: 0.0,
+            is_transitioning: false,
         }
     }
 
@@ -422,7 +436,27 @@ impl MmdModel {
     pub fn set_layer_fade_times(&mut self, layer_id: usize, fade_in: f32, fade_out: f32) {
         self.animation_layer_manager.set_layer_fade_times(layer_id, fade_in, fade_out);
     }
-
+    
+    /// 带过渡地切换层动画（矩阵插值过渡）
+    /// 
+    /// 从当前骨骼姿态平滑过渡到新动画的第一帧，避免动作切换时的突兀感。
+    /// 
+    /// # 参数
+    /// - `layer_id`: 层 ID
+    /// - `animation`: 新动画
+    /// - `transition_time`: 过渡时间（秒），推荐 0.2 ~ 0.5 秒
+    pub fn transition_layer_to(&mut self, layer_id: usize, animation: Option<Arc<VmdAnimation>>, transition_time: f32) {
+        if transition_time > 0.0 {
+            self.transition_matrices = self.bone_manager.get_skinning_matrices().to_vec();
+            self.transition_duration = transition_time;
+            self.transition_progress = 0.0;
+            self.is_transitioning = true;
+        }
+        
+        self.animation_layer_manager.set_layer_animation(layer_id, animation);
+        self.animation_layer_manager.play_layer(layer_id);
+    }
+    
     /// 获取指定层的最大帧数
     pub fn get_layer_max_frame(&self, layer_id: usize) -> u32 {
         self.animation_layer_manager
@@ -437,17 +471,6 @@ impl MmdModel {
             .map(|i| self.get_layer_max_frame(i))
             .max()
             .unwrap_or(0)
-    }
-
-    /// 【兼容旧接口】设置动画（使用层0）
-    pub fn set_animation(&mut self, animation: Option<Arc<VmdAnimation>>) {
-        self.set_layer_animation(0, animation);
-        self.animation_layer_manager.play_layer(0);
-    }
-
-    /// 【兼容旧接口】获取当前动画的最大帧数
-    pub fn get_animation_max_frame(&self) -> u32 {
-        self.get_layer_max_frame(0)
     }
 
     /// 更新动画（每帧调用）- 多动画层版本（CPU蒙皮模式）
@@ -486,7 +509,65 @@ impl MmdModel {
         self.end_physics_update();
 
         self.end_animation();
+        
+        // 应用矩阵插值过渡
+        self.apply_transition_blend(elapsed);
+        
         self.update();
+    }
+    
+    /// 应用矩阵插值过渡
+    fn apply_transition_blend(&mut self, elapsed: f32) {
+        if !self.is_transitioning {
+            return;
+        }
+        
+        // 检查过渡矩阵是否有效
+        if self.transition_matrices.is_empty() {
+            self.is_transitioning = false;
+            return;
+        }
+        
+        // 更新过渡进度
+        self.transition_progress += elapsed / self.transition_duration;
+        
+        if self.transition_progress >= 1.0 {
+            // 过渡完成，不再修改矩阵
+            self.transition_progress = 1.0;
+            self.is_transitioning = false;
+            self.transition_matrices.clear();
+            return;
+        }
+        
+        // 平滑过渡曲线 (smoothstep)
+        let t = self.transition_progress;
+        let smooth_t = t * t * (3.0 - 2.0 * t);
+        
+        // 先复制当前蒙皮矩阵（避免借用冲突）
+        let new_matrices: Vec<Mat4> = self.bone_manager.get_skinning_matrices().to_vec();
+        let bone_count = self.transition_matrices.len().min(new_matrices.len());
+        
+        for i in 0..bone_count {
+            let old_mat = self.transition_matrices[i];
+            let new_mat = new_matrices[i];
+            
+            // 简单的矩阵线性插值（LERP），避免分解失败导致的拉扯
+            // 对于蒙皮矩阵，直接插值通常比分解更稳定
+            let blended_mat = Self::lerp_matrix(old_mat, new_mat, smooth_t);
+            self.bone_manager.set_skinning_matrix(i, blended_mat);
+        }
+    }
+    
+    /// 矩阵线性插值
+    fn lerp_matrix(a: Mat4, b: Mat4, t: f32) -> Mat4 {
+        // 分量线性插值
+        let cols_a = a.to_cols_array();
+        let cols_b = b.to_cols_array();
+        let mut result = [0.0f32; 16];
+        for i in 0..16 {
+            result[i] = cols_a[i] * (1.0 - t) + cols_b[i] * t;
+        }
+        Mat4::from_cols_array(&result)
     }
 
     /// 设置头部角度
@@ -1051,6 +1132,9 @@ impl MmdModel {
         self.update_node_animation(true);
         self.end_physics_update();
         self.end_animation();
+        
+        // 应用矩阵插值过渡（GPU蒙皮模式也需要）
+        self.apply_transition_blend(elapsed);
         
         // 调试日志（仅首次）
         if !self.debug_logged && physics_enabled {

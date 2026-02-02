@@ -359,6 +359,13 @@ public class MMDModelNativeRender implements IMMDModel {
     }
     
     @Override
+    public void TransitionAnim(long anim, long layer, float transitionTime) {
+        if (model != 0) {
+            nf.TransitionLayerTo(model, layer, anim, transitionTime);
+        }
+    }
+    
+    @Override
     public void ResetPhysics() {
         if (model != 0) {
             nf.ResetModelPhysics(model);

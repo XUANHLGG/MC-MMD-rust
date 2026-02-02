@@ -12,6 +12,8 @@
 
 use glam::{Mat4, Vec3};
 use rapier3d::prelude::*;
+use rapier3d::math::Real;
+use std::num::NonZeroUsize;
 
 use mmd::pmx::rigid_body::RigidBody as PmxRigidBody;
 use mmd::pmx::joint::Joint as PmxJoint;
@@ -36,7 +38,7 @@ pub struct MMDPhysics {
     /// 岛管理器
     pub island_manager: IslandManager,
     /// 宽相检测
-    pub broad_phase: BroadPhaseBvh,
+    pub broad_phase: DefaultBroadPhase,
     /// 窄相检测
     pub narrow_phase: NarrowPhase,
     /// 刚体集合
@@ -60,7 +62,7 @@ pub struct MMDPhysics {
     /// 最大子步数
     pub max_substep_count: i32,
     /// 重力向量
-    pub gravity: Vector,
+    pub gravity: Vector<Real>,
     /// 是否启用关节（调试用）
     pub joints_enabled: bool,
     /// 上一帧的模型变换（用于计算模型整体移动速度）
@@ -90,7 +92,7 @@ impl MMDPhysics {
         // 设置积分参数（从配置读取）
         let mut integration_parameters = IntegrationParameters::default();
         integration_parameters.dt = 1.0 / config.physics_fps;
-        integration_parameters.num_solver_iterations = config.solver_iterations;
+        integration_parameters.num_solver_iterations = NonZeroUsize::new(config.solver_iterations).unwrap_or(NonZeroUsize::new(4).unwrap());
         integration_parameters.num_internal_pgs_iterations = config.pgs_iterations;
         integration_parameters.normalized_max_corrective_velocity = config.max_corrective_velocity;
         
@@ -103,7 +105,7 @@ impl MMDPhysics {
             physics_pipeline: PhysicsPipeline::new(),
             integration_parameters,
             island_manager: IslandManager::new(),
-            broad_phase: BroadPhaseBvh::new(),
+            broad_phase: DefaultBroadPhase::new(),
             narrow_phase: NarrowPhase::new(),
             rigid_body_set,
             collider_set,
@@ -270,7 +272,7 @@ impl MMDPhysics {
         
         for _ in 0..num_substeps {
             self.physics_pipeline.step(
-                self.gravity,
+                &self.gravity,
                 &self.integration_parameters,
                 &mut self.island_manager,
                 &mut self.broad_phase,
@@ -280,6 +282,7 @@ impl MMDPhysics {
                 &mut self.impulse_joint_set,
                 &mut self.multibody_joint_set,
                 &mut self.ccd_solver,
+                None,
                 &(),
                 &(),
             );
@@ -306,7 +309,7 @@ impl MMDPhysics {
                 if let Some(rb) = self.rigid_body_set.get_mut(rb_handle) {
                     // 限制线速度
                     let linvel = rb.linvel();
-                    let linvel_mag = linvel.length();
+                    let linvel_mag = linvel.norm();
                     if linvel_mag > max_linear_velocity {
                         let scale = max_linear_velocity / linvel_mag;
                         rb.set_linvel(linvel * scale, true);
@@ -314,7 +317,7 @@ impl MMDPhysics {
                     
                     // 限制角速度
                     let angvel = rb.angvel();
-                    let angvel_mag = angvel.length();
+                    let angvel_mag = angvel.norm();
                     if angvel_mag > max_angular_velocity {
                         let scale = max_angular_velocity / angvel_mag;
                         rb.set_angvel(angvel * scale, true);
@@ -349,7 +352,7 @@ impl MMDPhysics {
                         // 计算速度（基于位置变化）
                         if let Some(prev_pose) = mmd_rb.prev_transform {
                             // 线速度 = (新位置 - 旧位置) / dt
-                            let delta_pos = new_pose.translation - prev_pose.translation;
+                            let delta_pos = new_pose.translation.vector - prev_pose.translation.vector;
                             let linvel = delta_pos / dt;
                             
                             // 角速度计算：从四元数差计算
@@ -362,9 +365,9 @@ impl MMDPhysics {
                             // 对于小角度旋转，角速度 ≈ 2 * (qx, qy, qz) / dt
                             // 这是四元数到角速度的近似公式
                             let angvel = Vector::new(
-                                2.0 * delta_rot.x / dt,
-                                2.0 * delta_rot.y / dt,
-                                2.0 * delta_rot.z / dt,
+                                2.0 * delta_rot.coords[0] / dt,
+                                2.0 * delta_rot.coords[1] / dt,
+                                2.0 * delta_rot.coords[2] / dt,
                             );
                             
                             // 设置速度（这会影响通过关节连接的动态刚体）

@@ -194,6 +194,16 @@ public class NativeFunc {
     public native int GetSubMeshVertexCount(long model, long pos);
 
     public native void ChangeModelAnim(long model, long anim, long layer);
+    
+    /**
+     * 带过渡地切换动画（矩阵插值过渡）
+     * 从当前骨骼姿态平滑过渡到新动画，避免动作切换时的突兀感
+     * @param model 模型句柄
+     * @param layer 动画层ID（0-3）
+     * @param anim 动画句柄（0表示清除动画）
+     * @param transitionTime 过渡时间（秒），推荐 0.2 ~ 0.5 秒
+     */
+    public native void TransitionLayerTo(long model, long layer, long anim, float transitionTime);
 
     public native void ResetModelPhysics(long model);
 

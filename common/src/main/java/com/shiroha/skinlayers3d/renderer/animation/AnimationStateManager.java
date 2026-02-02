@@ -14,6 +14,8 @@ import net.minecraft.world.entity.EntityType;
  */
 public class AnimationStateManager {
     
+    private static final float TRANSITION_TIME = 0.25f; // 过渡时间（秒）
+    
     /**
      * 更新玩家动画状态
      */
@@ -103,7 +105,7 @@ public class AnimationStateManager {
         if (!player.isUsingItem() && !player.swinging || player.isSleeping()) {
             if (model.entityData.stateLayers[1] != EntityAnimState.State.Idle) {
                 model.entityData.stateLayers[1] = EntityAnimState.State.Idle;
-                model.model.ChangeAnim(0, 1);
+                model.model.TransitionAnim(0, 1, TRANSITION_TIME);
             }
         } else {
             updateHandAnimation(player, model);
@@ -132,7 +134,7 @@ public class AnimationStateManager {
         } else {
             if (model.entityData.stateLayers[2] != EntityAnimState.State.Idle) {
                 model.entityData.stateLayers[2] = EntityAnimState.State.Idle;
-                model.model.ChangeAnim(0, 2);
+                model.model.TransitionAnim(0, 2, TRANSITION_TIME);
             }
         }
     }
@@ -141,7 +143,7 @@ public class AnimationStateManager {
         String property = EntityAnimState.getPropertyName(targetState);
         if (model.entityData.stateLayers[layer] != targetState) {
             model.entityData.stateLayers[layer] = targetState;
-            model.model.ChangeAnim(MMDAnimManager.GetAnimModel(model.model, property), layer);
+            model.model.TransitionAnim(MMDAnimManager.GetAnimModel(model.model, property), layer, TRANSITION_TIME);
         }
     }
     
@@ -153,7 +155,7 @@ public class AnimationStateManager {
         if (anim != 0) {
             if (model.entityData.stateLayers[layer] != targetState) {
                 model.entityData.stateLayers[layer] = targetState;
-                model.model.ChangeAnim(anim, layer);
+                model.model.TransitionAnim(anim, layer, TRANSITION_TIME);
             }
             return;
         }

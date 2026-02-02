@@ -89,6 +89,40 @@ public class MMDModelManager {
     }
     
     /**
+     * 强制重载指定模型（立即清除缓存并重新加载）
+     * 适用于模型切换时需要立即释放旧模型资源的场景
+     * 
+     * @param modelName 模型名称
+     */
+    public static void forceReloadModel(String modelName) {
+        // 收集所有与该模型相关的缓存键
+        java.util.List<String> keysToRemove = new java.util.ArrayList<>();
+        modelCache.forEach((key, entry) -> {
+            if (key.startsWith(modelName + "_")) {
+                keysToRemove.add(key);
+            }
+        });
+        
+        // 释放并移除
+        for (String key : keysToRemove) {
+            ModelCache.CacheEntry<Model> entry = modelCache.remove(key);
+            if (entry != null) {
+                disposeModel(entry.value);
+                logger.info("强制释放模型: {}", key);
+            }
+        }
+    }
+    
+    /**
+     * 强制重载所有模型（立即清除所有缓存）
+     * 适用于渲染模式切换（CPU/GPU）时需要完全重建所有模型的场景
+     */
+    public static void forceReloadAllModels() {
+        modelCache.clear(MMDModelManager::disposeModel);
+        logger.info("强制重载所有模型完成");
+    }
+    
+    /**
      * 定期检查，在渲染循环中调用
      */
     public static void tick() {

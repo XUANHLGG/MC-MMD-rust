@@ -154,7 +154,6 @@ public class ToonRenderHelper {
             long startPos = (long) nf.GetSubMeshBeginIndex(model, i) * indexElementSize;
             int count = nf.GetSubMeshVertexCount(model, i);
             
-            RenderSystem.assertOnRenderThread();
             GL46C.glDrawElements(GL46C.GL_TRIANGLES, count, indexType, startPos);
         }
     }

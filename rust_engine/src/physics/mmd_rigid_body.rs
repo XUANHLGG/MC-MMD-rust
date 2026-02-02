@@ -4,7 +4,10 @@
 
 use glam::{Mat4, Vec3, Quat};
 use rapier3d::prelude::*;
-use rapier3d::geometry::InteractionTestMode;
+use rapier3d::math::Real;
+
+/// Rapier Isometry 类型别名
+pub type Pose = rapier3d::math::Isometry<Real>;
 
 use mmd::pmx::rigid_body::{RigidBody as PmxRigidBody, RigidBodyShape, RigidBodyMode};
 
@@ -154,7 +157,7 @@ impl MMDRigidBody {
         let angular_damping = self.angular_damping * config.angular_damping_scale;
         
         RigidBodyBuilder::new(rb_type)
-            .pose(self.initial_transform)
+            .position(self.initial_transform)
             .linear_damping(linear_damping)
             .angular_damping(angular_damping)
             .ccd_enabled(false)
@@ -189,7 +192,6 @@ impl MMDRigidBody {
         let collision_groups = InteractionGroups::new(
             Group::from_bits_truncate(1 << self.group),
             Group::from_bits_truncate(self.group_mask as u32),
-            InteractionTestMode::default(),
         );
         
         let builder = ColliderBuilder::new(shape)
@@ -250,34 +252,36 @@ pub fn inv_z(m: Mat4) -> Mat4 {
     inv_z_mat * m * inv_z_mat
 }
 
-/// 将 glam Mat4 转换为 Rapier Pose
+/// 将 glam Mat4 转换为 Rapier Isometry
 pub fn mat4_to_isometry(mat: Mat4) -> Pose {
     let (_, rotation, translation) = mat.to_scale_rotation_translation();
-    Pose::from_translation(Vector::new(translation.x, translation.y, translation.z))
-        * Pose::from_rotation(Rotation::from_xyzw(rotation.x, rotation.y, rotation.z, rotation.w))
+    Isometry::new(
+        vector![translation.x, translation.y, translation.z],
+        vector![rotation.x, rotation.y, rotation.z] * rotation.w.acos() * 2.0 / (1.0 - rotation.w * rotation.w).sqrt().max(1e-6)
+    )
 }
 
-/// 将 Rapier Pose 转换为 glam Mat4
+/// 将 Rapier Isometry 转换为 glam Mat4
 pub fn isometry_to_mat4(iso: Pose) -> Mat4 {
     let translation = Vec3::new(
         iso.translation.x,
         iso.translation.y,
         iso.translation.z,
     );
-    // Rapier 的 Rotation 是 glamx 的 Quat，直接访问 x, y, z, w 字段
     let rot = iso.rotation;
-    let rotation = Quat::from_xyzw(rot.x, rot.y, rot.z, rot.w);
+    // UnitQuaternion: coords 包含 [i, j, k, w]
+    let rotation = Quat::from_xyzw(rot.coords[0], rot.coords[1], rot.coords[2], rot.coords[3]);
     Mat4::from_rotation_translation(rotation, translation)
 }
 
 /// 将 glam Vec3 转换为 Rapier Vector
 #[allow(dead_code)]
-pub fn vec3_to_rapier(v: Vec3) -> Vector {
+pub fn vec3_to_rapier(v: Vec3) -> Vector<Real> {
     Vector::new(v.x, v.y, v.z)
 }
 
 /// 将 Rapier Vector 转换为 glam Vec3
 #[allow(dead_code)]
-pub fn rapier_to_vec3(v: Vector) -> Vec3 {
+pub fn rapier_to_vec3(v: Vector<Real>) -> Vec3 {
     Vec3::new(v.x, v.y, v.z)
 }

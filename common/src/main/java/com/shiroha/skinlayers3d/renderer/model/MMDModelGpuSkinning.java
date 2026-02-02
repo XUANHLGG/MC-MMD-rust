@@ -656,7 +656,6 @@ public class MMDModelGpuSkinning implements IMMDModel {
             long startPos = (long) nf.GetSubMeshBeginIndex(model, i) * indexElementSize;
             int count = nf.GetSubMeshVertexCount(model, i);
             
-            RenderSystem.assertOnRenderThread();
             GL46C.glDrawElements(GL46C.GL_TRIANGLES, count, indexType, startPos);
         }
     }
@@ -712,6 +711,11 @@ public class MMDModelGpuSkinning implements IMMDModel {
     @Override
     public void ChangeAnim(long anim, long layer) {
         nf.ChangeModelAnim(model, anim, layer);
+    }
+    
+    @Override
+    public void TransitionAnim(long anim, long layer, float transitionTime) {
+        nf.TransitionLayerTo(model, layer, anim, transitionTime);
     }
     
     @Override

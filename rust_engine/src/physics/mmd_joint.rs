@@ -7,11 +7,10 @@
 
 use glam::{Vec3, Quat, Mat4};
 use rapier3d::prelude::*;
-use rapier3d::math::Pose;
 
 use mmd::pmx::joint::{Joint as PmxJoint, JointType};
 
-use super::mmd_rigid_body::{mat4_to_isometry, isometry_to_mat4, inv_z};
+use super::mmd_rigid_body::{mat4_to_isometry, isometry_to_mat4, inv_z, Pose};
 use super::config::get_config;
 
 /// MMD 关节

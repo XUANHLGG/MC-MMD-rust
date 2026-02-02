@@ -12,11 +12,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # 本地依赖
 mmd = { path = "deps/mmd-rs", default-features = false, features = ["arrayvec"] }
-glam = { path = "deps/glam-rs", features = ["std"] }
-rapier3d = { path = "deps/rapier/crates/rapier3d", default-features = false, features = ["dim3", "f32"] }
+glam = { version = "0.29", features = ["std"] }
+rapier3d = { version = "0.22", default-features = false, features = ["dim3", "f32"] }
 jni = "0.21"
 
 # 外部依赖
+bitflags = "2.6"
 byteorder = "1.5"
 encoding_rs = "0.8"
 thiserror = "2"

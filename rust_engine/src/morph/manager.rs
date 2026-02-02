@@ -54,6 +54,11 @@ impl MorphManager {
         }
     }
     
+    /// 获取 Morph 权重
+    pub fn get_morph_weight(&self, index: usize) -> f32 {
+        self.morphs.get(index).map(|m| m.weight).unwrap_or(0.0)
+    }
+    
     /// 重置所有 Morph 权重
     pub fn reset_all_weights(&mut self) {
         for morph in &mut self.morphs {

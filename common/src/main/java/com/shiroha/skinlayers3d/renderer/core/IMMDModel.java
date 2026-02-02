@@ -35,6 +35,15 @@ public interface IMMDModel {
      * @param layer 动画层
      */
     void ChangeAnim(long anim, long layer);
+    
+    /**
+     * 带过渡地切换动画
+     * 
+     * @param anim 动画句柄
+     * @param layer 动画层
+     * @param transitionTime 过渡时间（秒）
+     */
+    void TransitionAnim(long anim, long layer, float transitionTime);
 
     /**
      * 重置物理模拟

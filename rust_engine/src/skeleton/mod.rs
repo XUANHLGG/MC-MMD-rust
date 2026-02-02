@@ -1,17 +1,26 @@
-//! 骨骼系统和 IK 求解器
+//! 骨骼系统 - 参考 nphysics Multibody 设计
+//!
+//! 核心设计思想：
+//! - BoneLink: 类似 nphysics MultibodyLink，表示单个骨骼节点
+//! - BoneSet: 类似 nphysics Multibody，管理骨骼层次结构
+//! - IkSolver: IK 求解器
 
-mod bone;
+mod bone_link;
+mod bone_set;
 mod ik_solver;
-mod manager;
 
-pub use bone::Bone;
+pub use bone_link::{BoneLink, BoneFlags, IkConfig, IkLink, AppendConfig};
+pub use bone_set::BoneSet;
 pub use ik_solver::IkSolver;
-pub use manager::BoneManager;
 
 use glam::{Vec3, Quat, Mat4};
 
+// ============================================================================
+// 公共类型定义
+// ============================================================================
+
 /// 骨骼变换数据
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct BoneTransform {
     pub translation: Vec3,
     pub rotation: Quat,
@@ -29,7 +38,26 @@ impl Default for BoneTransform {
 }
 
 impl BoneTransform {
+    /// 转换为 4x4 矩阵
+    #[inline]
     pub fn to_matrix(&self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }
+    
+    /// 从矩阵分解
+    #[inline]
+    pub fn from_matrix(m: Mat4) -> Self {
+        let (scale, rotation, translation) = m.to_scale_rotation_translation();
+        Self { translation, rotation, scale }
+    }
 }
+
+// ============================================================================
+// 类型别名
+// ============================================================================
+
+/// Bone 别名
+pub type Bone = BoneLink;
+
+/// BoneManager 别名
+pub type BoneManager = BoneSet;

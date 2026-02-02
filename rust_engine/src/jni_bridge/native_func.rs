@@ -684,7 +684,7 @@ pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_ChangeModelAnim(
     }
 }
 
-/// 重置物理（兼容旧接口，等同于 ResetPhysics）
+/// 重置物理
 #[no_mangle]
 pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_ResetModelPhysics(
     _env: JNIEnv,
@@ -703,7 +703,7 @@ pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_ResetModelPhysic
 pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_LoadAnimation(
     mut env: JNIEnv,
     _class: JClass,
-    model: jlong,
+    _model: jlong,
     filename: JString,
 ) -> jlong {
     let filename_str: String = match env.get_string(&filename) {
@@ -711,22 +711,16 @@ pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_LoadAnimation(
         Err(_) => return 0,
     };
 
-    let models = MODELS.read().unwrap();
-    if let Some(model_arc) = models.get(&model) {
-        let model = model_arc.lock().unwrap();
-
-        match VmdFile::load(&filename_str) {
-            Ok(vmd) => {
-                let animation =
-                    VmdAnimation::from_vmd(&vmd, &model.bone_manager, &model.morph_manager);
-                return register_animation(animation);
-            }
-            Err(e) => {
-                log::error!("Failed to load VMD: {}", e);
-            }
+    match VmdFile::load(&filename_str) {
+        Ok(vmd) => {
+            let animation = VmdAnimation::from_vmd_file(vmd);
+            register_animation(animation)
+        }
+        Err(e) => {
+            log::error!("Failed to load VMD: {}", e);
+            0
         }
     }
-    0
 }
 
 /// 删除动画
@@ -1058,6 +1052,38 @@ pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_SetLayerFadeTime
     if let Some(model_arc) = models.get(&model) {
         let mut model = model_arc.lock().unwrap();
         model.set_layer_fade_times(layer as usize, fade_in, fade_out);
+    }
+}
+
+/// 带过渡地切换指定层的动画（姿态缓存过渡）
+/// 
+/// 从当前骨骼姿态平滑过渡到新动画，避免动作切换时的突兀感。
+/// 
+/// # 参数
+/// - model: 模型句柄
+/// - layer: 动画层ID（0-3）
+/// - animation: 动画句柄（0表示清除动画）
+/// - transition_time: 过渡时间（秒），推荐 0.2 ~ 0.5 秒
+#[no_mangle]
+pub extern "system" fn Java_com_shiroha_skinlayers3d_NativeFunc_TransitionLayerTo(
+    _env: JNIEnv,
+    _class: JClass,
+    model: jlong,
+    layer: jlong,
+    animation: jlong,
+    transition_time: jfloat,
+) {
+    let models = MODELS.read().unwrap();
+    let animations = ANIMATIONS.read().unwrap();
+    
+    if let Some(model_arc) = models.get(&model) {
+        let mut model = model_arc.lock().unwrap();
+        let anim = if animation != 0 {
+            animations.get(&animation).cloned()
+        } else {
+            None
+        };
+        model.transition_layer_to(layer as usize, anim, transition_time);
     }
 }
 

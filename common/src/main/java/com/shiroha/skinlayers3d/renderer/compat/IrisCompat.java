@@ -220,8 +220,12 @@ public class IrisCompat {
             // 获取 WorldRenderingPhase 枚举值
             @SuppressWarnings({"unchecked", "rawtypes"})
             Class<Enum> phaseEnumClass = (Class<Enum>) worldRenderingPhaseClass;
-            entitiesPhase = Enum.valueOf(phaseEnumClass, "ENTITIES");
-            nonePhase = Enum.valueOf(phaseEnumClass, "NONE");
+            @SuppressWarnings("unchecked")
+            Enum<?> entities = Enum.valueOf(phaseEnumClass, "ENTITIES");
+            @SuppressWarnings("unchecked")
+            Enum<?> none = Enum.valueOf(phaseEnumClass, "NONE");
+            entitiesPhase = entities;
+            nonePhase = none;
             
             // GlFramebuffer.bind()
             framebufferBindMethod = glFramebufferClass.getMethod("bind");
