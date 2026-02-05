@@ -19,7 +19,12 @@ public class NativeFunc {
     private static final boolean isLinux = System.getProperty("os.name").toLowerCase().contains("linux");
     private static final boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
     private static final boolean isMacOS = System.getProperty("os.name").toLowerCase().contains("mac");
-    static final String libraryVersion = "Rust-20260125";
+    private static final boolean isArm64;
+    static {
+        String arch = System.getProperty("os.arch").toLowerCase();
+        isArm64 = arch.contains("aarch64") || arch.contains("arm64");
+    }
+    static final String libraryVersion = "v1.0.0";
     private static volatile NativeFunc inst;
     private static final Object lock = new Object();
 
@@ -132,16 +137,19 @@ public class NativeFunc {
         String fileName;
         
         if (isWindows) {
-            logger.info("Windows Env Detected!");
-            resourcePath = "/natives/windows/mmd_engine.dll";
+            String archDir = isArm64 ? "windows-arm64" : "windows-x64";
+            logger.info("Windows Env Detected! Arch: " + archDir);
+            resourcePath = "/natives/" + archDir + "/mmd_engine.dll";
             fileName = "mmd_engine.dll";
         } else if (isMacOS) {
-            logger.info("macOS Env Detected!");
-            resourcePath = "/natives/macos/libmmd_engine.dylib";
+            String archDir = isArm64 ? "macos-arm64" : "macos-x64";
+            logger.info("macOS Env Detected! Arch: " + archDir);
+            resourcePath = "/natives/" + archDir + "/libmmd_engine.dylib";
             fileName = "libmmd_engine.dylib";
         } else if (isLinux && !isAndroid) {
-            logger.info("Linux Env Detected!");
-            resourcePath = "/natives/linux/libmmd_engine.so";
+            String archDir = isArm64 ? "linux-arm64" : "linux-x64";
+            logger.info("Linux Env Detected! Arch: " + archDir);
+            resourcePath = "/natives/" + archDir + "/libmmd_engine.so";
             fileName = "libmmd_engine.so";
         } else if (isLinux && isAndroid) {
             logger.info("Android Env Detected!");
