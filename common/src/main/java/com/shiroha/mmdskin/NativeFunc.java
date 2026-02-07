@@ -15,7 +15,7 @@ import org.apache.logging.log4j.Logger;
 
 public class NativeFunc {
     public static final Logger logger = LogManager.getLogger();
-    private static final String gameDirectory = Minecraft.getInstance().gameDirectory.getAbsolutePath();
+    private static volatile String gameDirectory;
     private static final boolean isLinux = System.getProperty("os.name").toLowerCase().contains("linux");
     private static final boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
     private static final boolean isMacOS = System.getProperty("os.name").toLowerCase().contains("mac");
@@ -29,6 +29,13 @@ public class NativeFunc {
         "https://github.com/shiroha-233/MC-MMD-rust/releases/download/" + libraryVersion + "/";
     private static volatile NativeFunc inst;
     private static final Object lock = new Object();
+
+    private static String getGameDirectory() {
+        if (gameDirectory == null) {
+            gameDirectory = Minecraft.getInstance().gameDirectory.getAbsolutePath();
+        }
+        return gameDirectory;
+    }
 
     public static NativeFunc GetInst() {
         if (inst == null) {
@@ -48,7 +55,7 @@ public class NativeFunc {
      */
     private String getInstalledVersion(String fileName) {
         try {
-            Path versionPath = Paths.get(gameDirectory, fileName + ".version");
+            Path versionPath = Paths.get(getGameDirectory(), fileName + ".version");
             if (Files.exists(versionPath)) {
                 return Files.readString(versionPath).trim();
             }
@@ -63,7 +70,7 @@ public class NativeFunc {
      */
     private void saveInstalledVersion(String fileName, String version) {
         try {
-            Path versionPath = Paths.get(gameDirectory, fileName + ".version");
+            Path versionPath = Paths.get(getGameDirectory(), fileName + ".version");
             Files.writeString(versionPath, version);
         } catch (Exception e) {
             logger.warn("保存版本文件失败: " + e.getMessage());
@@ -75,8 +82,8 @@ public class NativeFunc {
      */
     private void renameOldLibrary(String fileName) {
         try {
-            Path libPath = Paths.get(gameDirectory, fileName);
-            Path oldPath = Paths.get(gameDirectory, fileName + ".old");
+            Path libPath = Paths.get(getGameDirectory(), fileName);
+            Path oldPath = Paths.get(getGameDirectory(), fileName + ".old");
             if (Files.exists(libPath)) {
                 // 删除可能存在的旧 .old 文件
                 Files.deleteIfExists(oldPath);
@@ -90,7 +97,7 @@ public class NativeFunc {
 
     private File extractNativeLibrary(String resourcePath, String fileName) {
         try {
-            Path targetPath = Paths.get(gameDirectory, fileName);
+            Path targetPath = Paths.get(getGameDirectory(), fileName);
             File targetFile = targetPath.toFile();
             
             // 检查已安装版本
@@ -103,21 +110,25 @@ public class NativeFunc {
             }
             
             // 版本不匹配或文件不存在，需要释放新版本
-            InputStream is = NativeFunc.class.getResourceAsStream(resourcePath);
-            if (is == null) {
-                logger.warn("内置原生库未找到: " + resourcePath);
-                return targetFile.exists() ? targetFile : null;
+            try (InputStream is = NativeFunc.class.getResourceAsStream(resourcePath)) {
+                if (is == null) {
+                    logger.warn("内置原生库未找到: " + resourcePath);
+                    if (targetFile.exists()) {
+                        logger.warn("将回退使用旧版本库: " + fileName + " (版本: " + (installedVersion != null ? installedVersion : "未知") + ")");
+                        return targetFile;
+                    }
+                    return null;
+                }
+                
+                if (targetFile.exists()) {
+                    // 版本不匹配，重命名旧文件
+                    logger.info("检测到版本变更: " + (installedVersion != null ? installedVersion : "未知") + " -> " + libraryVersion);
+                    renameOldLibrary(fileName);
+                }
+                
+                // 释放新版本
+                Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
-            
-            if (targetFile.exists()) {
-                // 版本不匹配，重命名旧文件
-                logger.info("检测到版本变更: " + (installedVersion != null ? installedVersion : "未知") + " -> " + libraryVersion);
-                renameOldLibrary(fileName);
-            }
-            
-            // 释放新版本
-            Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            is.close();
             
             // 保存版本文件
             saveInstalledVersion(fileName, libraryVersion);
@@ -137,7 +148,7 @@ public class NativeFunc {
      */
     private File downloadNativeLibrary(String downloadFileName, String localFileName) {
         try {
-            Path targetPath = Paths.get(gameDirectory, localFileName);
+            Path targetPath = Paths.get(getGameDirectory(), localFileName);
 
             // 已有版本匹配的文件，无需下载
             String installedVersion = getInstalledVersion(localFileName);
@@ -171,6 +182,7 @@ public class NativeFunc {
 
             if (conn == null || conn.getResponseCode() != 200) {
                 logger.warn("下载失败，HTTP 状态码: " + (conn != null ? conn.getResponseCode() : "无连接"));
+                if (conn != null) conn.disconnect();
                 return null;
             }
 
@@ -179,7 +191,7 @@ public class NativeFunc {
                     (contentLength > 0 ? (contentLength / 1024) + " KB" : "未知"));
 
             // 先下载到临时文件，完成后再移动，避免半成品文件
-            Path tempPath = Paths.get(gameDirectory, localFileName + ".download");
+            Path tempPath = Paths.get(getGameDirectory(), localFileName + ".download");
             try (InputStream is = conn.getInputStream()) {
                 Files.copy(is, tempPath, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -190,13 +202,14 @@ public class NativeFunc {
             }
 
             Files.move(tempPath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            conn.disconnect();
             saveInstalledVersion(localFileName, libraryVersion);
             logger.info("原生库下载完成: " + localFileName);
             return targetPath.toFile();
         } catch (Exception e) {
             logger.error("下载原生库失败: " + downloadFileName, e);
             try {
-                Files.deleteIfExists(Paths.get(gameDirectory, localFileName + ".download"));
+                Files.deleteIfExists(Paths.get(getGameDirectory(), localFileName + ".download"));
             } catch (Exception ignored) {}
             return null;
         }
@@ -235,7 +248,7 @@ public class NativeFunc {
             throw new UnsupportedOperationException("Unsupported OS: " + osName);
         }
         
-        File libFile = new File(gameDirectory, fileName);
+        File libFile = new File(getGameDirectory(), fileName);
         
         // 1. 优先从模组内置资源提取（确保版本一致）
         File extracted = extractNativeLibrary(resourcePath, fileName);
@@ -260,19 +273,26 @@ public class NativeFunc {
         }
         
         // 3. 回退到游戏目录的外部文件（用户自定义版本）
-        if (libFile.exists()) {
-            try {
-                LoadLibrary(libFile);
-                logger.info("已从游戏目录加载原生库: " + fileName);
-                return;
-            } catch (Error e) {
-                logger.error("外部库文件也无法加载: " + e.getMessage());
+        // 同时检查不带后缀的文件名（如 mmd_engine.dll）和带平台后缀的文件名（如 mmd_engine-windows-x64.dll）
+        File[] candidates = new File[] {
+            libFile,
+            new File(getGameDirectory(), downloadFileName)
+        };
+        for (File candidate : candidates) {
+            if (candidate.exists()) {
+                try {
+                    LoadLibrary(candidate);
+                    logger.info("已从游戏目录加载原生库: " + candidate.getName());
+                    return;
+                } catch (Error e) {
+                    logger.error("外部库文件加载失败: " + candidate.getName() + " - " + e.getMessage());
+                }
             }
         }
         
         // 4. 全部失败
         throw new UnsatisfiedLinkError("无法加载原生库: " + fileName +
-            "，请检查网络连接或从 " + RELEASE_BASE_URL + " 手动下载");
+            "（也尝试了 " + downloadFileName + "），请检查网络连接或从 " + RELEASE_BASE_URL + " 手动下载");
     }
 
     public native String GetVersion();
