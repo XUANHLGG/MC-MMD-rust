@@ -22,9 +22,13 @@ public class NativeFunc {
     private static final boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
     private static final boolean isMacOS = System.getProperty("os.name").toLowerCase().contains("mac");
     private static final boolean isArm64;
+    private static final boolean isLoongArch64;
+    private static final boolean isRiscv64;
     static {
         String arch = System.getProperty("os.arch").toLowerCase();
         isArm64 = arch.contains("aarch64") || arch.contains("arm64");
+        isLoongArch64 = arch.contains("loongarch64") || arch.contains("loong64");
+        isRiscv64 = arch.contains("riscv64");
         // Android 检测（FCL/PojavLauncher 等启动器使用标准 JVM）
         boolean androidDetected = false;
         String[] launcherEnvKeys = { "FCL_NATIVEDIR", "POJAV_NATIVEDIR", "MOD_ANDROID_RUNTIME", "FCL_VERSION_CODE" };
@@ -388,7 +392,16 @@ public class NativeFunc {
             fileName = "libmmd_engine.dylib";
             downloadFileName = "libmmd_engine-" + archDir + ".dylib";
         } else if (isLinux) {
-            String archDir = isArm64 ? "linux-arm64" : "linux-x64";
+            String archDir;
+                if (isArm64) {
+                    archDir = "linux-arm64";
+                } else if (isLoongArch64) {
+                    archDir = "linux-loongarch64";
+                } else if (isRiscv64) {
+                    archDir = "linux-riscv64";
+                } else {
+                    archDir = "linux-x64";
+                }
             logger.info("Linux Env Detected! Arch: " + archDir);
             resourcePath = "/natives/" + archDir + "/libmmd_engine.so";
             fileName = "libmmd_engine.so";
