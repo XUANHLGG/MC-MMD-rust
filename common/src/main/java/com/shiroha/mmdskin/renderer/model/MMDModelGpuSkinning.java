@@ -90,9 +90,11 @@ public class MMDModelGpuSkinning implements IMMDModel {
     private ByteBuffer norBuffer;
     @SuppressWarnings("unused")
     private ByteBuffer uv0Buffer;
+    @SuppressWarnings("unused")
     private ByteBuffer colorBuffer;
     @SuppressWarnings("unused")
     private ByteBuffer uv1Buffer;
+    @SuppressWarnings("unused")
     private ByteBuffer uv2Buffer;
     private FloatBuffer boneMatricesBuffer;
     private FloatBuffer modelViewMatBuff;
@@ -724,31 +726,13 @@ public class MMDModelGpuSkinning implements IMMDModel {
         GL46C.glUseProgram(shaderProgram);
         updateLocation(shaderProgram);
         
-        // 上传动态数据到 GPU 缓冲区
-        
-        // UV2（lightmap）— 每帧更新
+        // === UV2 和 Color：所有顶点值相同，使用常量顶点属性（避免逐顶点循环和缓冲区上传）===
         int blockBrightness = 16 * blockLight;
         int skyBrightness = Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
-        uv2Buffer.clear();
-        for (int i = 0; i < vertexCount; i++) {
-            uv2Buffer.putInt(blockBrightness);
-            uv2Buffer.putInt(skyBrightness);
-        }
-        uv2Buffer.flip();
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2BufferObject);
-        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv2Buffer, GL46C.GL_DYNAMIC_DRAW);
-        
-        // Color（应用光照强度）— 每帧更新
-        colorBuffer.clear();
-        for (int i = 0; i < vertexCount; i++) {
-            colorBuffer.putFloat(lightIntensity);
-            colorBuffer.putFloat(lightIntensity);
-            colorBuffer.putFloat(lightIntensity);
-            colorBuffer.putFloat(1.0f);
-        }
-        colorBuffer.flip();
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, colorBufferObject);
-        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, colorBuffer, GL46C.GL_DYNAMIC_DRAW);
+        if (uv2Location != -1) GL46C.glVertexAttribI4i(uv2Location, blockBrightness, skyBrightness, 0, 0);
+        if (I_uv2Location != -1) GL46C.glVertexAttribI4i(I_uv2Location, blockBrightness, skyBrightness, 0, 0);
+        if (colorLocation != -1) GL46C.glVertexAttrib4f(colorLocation, lightIntensity, lightIntensity, lightIntensity, 1.0f);
+        if (I_colorLocation != -1) GL46C.glVertexAttrib4f(I_colorLocation, lightIntensity, lightIntensity, lightIntensity, 1.0f);
         
         // 绑定顶点属性（标准名称）
         if (positionLocation != -1) {
@@ -768,20 +752,10 @@ public class MMDModelGpuSkinning implements IMMDModel {
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, activeUvBuffer);
             GL46C.glVertexAttribPointer(uv0Location, 2, GL46C.GL_FLOAT, false, 0, 0);
         }
-        if (uv2Location != -1) {
-            GL46C.glEnableVertexAttribArray(uv2Location);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2BufferObject);
-            GL46C.glVertexAttribIPointer(uv2Location, 2, GL46C.GL_INT, 0, 0);
-        }
         if (uv1Location != -1) {
             GL46C.glEnableVertexAttribArray(uv1Location);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv1BufferObject);
             GL46C.glVertexAttribIPointer(uv1Location, 2, GL46C.GL_INT, 0, 0);
-        }
-        if (colorLocation != -1) {
-            GL46C.glEnableVertexAttribArray(colorLocation);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, colorBufferObject);
-            GL46C.glVertexAttribPointer(colorLocation, 4, GL46C.GL_FLOAT, false, 0, 0);
         }
         
         // 绑定 Iris 重命名属性
@@ -799,16 +773,6 @@ public class MMDModelGpuSkinning implements IMMDModel {
             GL46C.glEnableVertexAttribArray(I_uv0Location);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, activeUvBuffer);
             GL46C.glVertexAttribPointer(I_uv0Location, 2, GL46C.GL_FLOAT, false, 0, 0);
-        }
-        if (I_uv2Location != -1) {
-            GL46C.glEnableVertexAttribArray(I_uv2Location);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2BufferObject);
-            GL46C.glVertexAttribIPointer(I_uv2Location, 2, GL46C.GL_INT, 0, 0);
-        }
-        if (I_colorLocation != -1) {
-            GL46C.glEnableVertexAttribArray(I_colorLocation);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, colorBufferObject);
-            GL46C.glVertexAttribPointer(I_colorLocation, 4, GL46C.GL_FLOAT, false, 0, 0);
         }
         
         drawAllSubMeshes(MCinstance);
