@@ -4,6 +4,7 @@ import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.core.EyeTrackingHelper;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
+import com.shiroha.mmdskin.renderer.core.IrisCompat;
 import com.shiroha.mmdskin.renderer.core.RenderContext;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
 import com.shiroha.mmdskin.renderer.shader.ShaderProvider;
@@ -72,6 +73,7 @@ public class MMDModelOpenGL implements IMMDModel {
 
     long model;
     String modelDir;
+    private String cachedModelName;
     int vertexCount;
     ByteBuffer posBuffer, colorBuffer, norBuffer, uv0Buffer, uv1Buffer, uv2Buffer;
     int vertexArrayObject;
@@ -86,7 +88,9 @@ public class MMDModelOpenGL implements IMMDModel {
     int indexType;
     Material[] mats;
     Material lightMapMaterial;
-    Vector3f light0Direction, light1Direction;
+    final Vector3f light0Direction = new Vector3f();
+    final Vector3f light1Direction = new Vector3f();
+    private final Quaternionf tempQuat = new Quaternionf();
     
     // 时间追踪（用于计算 deltaTime）
     private long lastUpdateTime = -1; // -1 表示未初始化
@@ -104,7 +108,13 @@ public class MMDModelOpenGL implements IMMDModel {
     public static void InitShader() {
         //Init Shader
         ShaderProvider.Init();
-        MMDShaderProgram = ShaderProvider.getProgram();
+        if (ShaderProvider.isReady()) {
+            MMDShaderProgram = ShaderProvider.getProgram();
+        } else {
+            logger.warn("MMD Shader 初始化失败，已自动禁用自定义着色器");
+            MMDShaderProgram = 0;
+            isMMDShaderEnabled = false;
+        }
         isShaderInited = true;
     }
 
@@ -185,6 +195,7 @@ public class MMDModelOpenGL implements IMMDModel {
             lightMapMaterial.hasAlpha = mgrTex.hasAlpha;
         }else{
             lightMapMaterial.tex = GL46C.glGenTextures();
+            lightMapMaterial.ownsTexture = true;
             GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, lightMapMaterial.tex);
             ByteBuffer texBuffer = ByteBuffer.allocateDirect(16*16*4);
             texBuffer.order(ByteOrder.LITTLE_ENDIAN);
@@ -274,6 +285,11 @@ public class MMDModelOpenGL implements IMMDModel {
             MemoryUtil.memFree(light1Buff);
             light1Buff = null;
         }
+
+        // 释放自建的 lightMap 纹理（来自 MMDTextureManager 的不在此删除）
+        if (lightMapMaterial != null && lightMapMaterial.ownsTexture && lightMapMaterial.tex > 0) {
+            GL46C.glDeleteTextures(lightMapMaterial.tex);
+        }
         
         // 删除 OpenGL 资源
         GL46C.glDeleteVertexArrays(vertexArrayObject);
@@ -309,7 +325,7 @@ public class MMDModelOpenGL implements IMMDModel {
         nf.SetHeadAngle(model, pitchRad, yawRad, 0.0f, context.isWorldScene());
         
         // 使用公共工具类更新眼球追踪
-        EyeTrackingHelper.updateEyeTracking(nf, model, entityIn, entityYaw, tickDelta);
+        EyeTrackingHelper.updateEyeTracking(nf, model, entityIn, entityYaw, tickDelta, getModelName());
         
         // 传递实体位置和朝向给物理系统（用于人物移动时的惯性效果）
         final float MODEL_SCALE = 0.09f;
@@ -346,6 +362,14 @@ public class MMDModelOpenGL implements IMMDModel {
     @Override
     public String GetModelDir() {
         return modelDir;
+    }
+    
+    @Override
+    public String getModelName() {
+        if (cachedModelName == null) {
+            cachedModelName = IMMDModel.super.getModelName();
+        }
+        return cachedModelName;
     }
 
     void Update() {
@@ -391,17 +415,17 @@ public class MMDModelOpenGL implements IMMDModel {
         float minBrightness = 0.1f;
         lightIntensity = minBrightness + lightIntensity * (1.0f - minBrightness);
         
-        light0Direction = new Vector3f(1.0f, 0.75f, 0.0f);
-        light1Direction = new Vector3f(-1.0f, 0.75f, 0.0f);
-        light0Direction.normalize();
-        light1Direction.normalize();
-        light0Direction.rotate(new Quaternionf().rotateY(entityYaw*((float)Math.PI / 180F)));
-        light1Direction.rotate(new Quaternionf().rotateY(entityYaw*((float)Math.PI / 180F)));
+        light0Direction.set(1.0f, 0.75f, 0.0f).normalize();
+        light1Direction.set(-1.0f, 0.75f, 0.0f).normalize();
+        float yawRad = entityYaw * ((float)Math.PI / 180F);
+        light0Direction.rotate(tempQuat.identity().rotateY(yawRad));
+        light1Direction.rotate(tempQuat.identity().rotateY(yawRad));
 
-        deliverStack.mulPose(new Quaternionf().rotateY(-entityYaw*((float)Math.PI / 180F)));
-        deliverStack.mulPose(new Quaternionf().rotateX(entityPitch*((float)Math.PI / 180F)));
+        deliverStack.mulPose(tempQuat.identity().rotateY(-yawRad));
+        deliverStack.mulPose(tempQuat.identity().rotateX(entityPitch*((float)Math.PI / 180F)));
         deliverStack.translate(entityTrans.x, entityTrans.y, entityTrans.z);
-        deliverStack.scale(0.09f, 0.09f, 0.09f);
+        float baseScale = 0.09f * com.shiroha.mmdskin.config.ModelConfigManager.getConfig(getModelName()).modelScale;
+        deliverStack.scale(baseScale, baseScale, baseScale);
         
         // MC 1.21.1 相机修复：重建模型视图矩阵
         // PoseStack 已含相机变换，自定义 OpenGL 渲染需手动重建矩阵防止位置随视角漂移
@@ -448,9 +472,14 @@ public class MMDModelOpenGL implements IMMDModel {
         
         // 普通渲染模式
         if(MmdSkinClient.usingMMDShader == 0){
-            shaderProgram = RenderSystem.getShader().getId();
-            setUniforms(RenderSystem.getShader(), deliverStack);
-            RenderSystem.getShader().apply();
+            ShaderInstance mcShader = RenderSystem.getShader();
+            if (mcShader == null) {
+                logger.debug("RenderSystem.getShader() 返回 null，跳过本帧渲染");
+                return;
+            }
+            shaderProgram = mcShader.getId();
+            setUniforms(mcShader, deliverStack);
+            mcShader.apply();
         }
         if(MmdSkinClient.usingMMDShader == 1){
             shaderProgram = MMDShaderProgram;
@@ -724,13 +753,21 @@ public class MMDModelOpenGL implements IMMDModel {
         // 确保纹理单元恢复到 TEXTURE0
         RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
 
-        RenderSystem.getShader().clear();
+        ShaderInstance currentShader = RenderSystem.getShader();
+        if (currentShader != null) {
+            currentShader.clear();
+        }
         BufferUploader.reset();
     }
 
     /**
      * Toon 渲染模式（CPU 蒙皮版本）
      * 两遍渲染：1. 描边（背面扩张）2. 主体（卡通着色）
+     * 
+     * Iris 兼容：
+     *   Iris 激活时，先通过 ExtendedShader.apply() 绑定 G-buffer FBO + MRT draw buffers，
+     *   再切换到 Toon 着色器程序。Toon 片段着色器已声明 layout(location=0..3) 多输出，
+     *   确保 Iris 的 draw buffers 全部被写入合理数据，避免透明。
      */
     private void renderToon(Minecraft MCinstance, float lightIntensity, PoseStack deliverStack) {
         BufferUploader.reset();
@@ -739,6 +776,16 @@ public class MMDModelOpenGL implements IMMDModel {
         RenderSystem.enableDepthTest();
         RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
         RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        
+        // Iris 兼容：绑定 Iris G-buffer FBO（如果 Iris 光影激活）
+        boolean irisActive = IrisCompat.isIrisShaderActive();
+        if (irisActive) {
+            ShaderInstance irisShader = RenderSystem.getShader();
+            if (irisShader != null) {
+                setUniforms(irisShader, deliverStack);
+                irisShader.apply();  // 绑定 Iris G-buffer FBO + MRT draw buffers
+            }
+        }
         
         // 获取蒙皮后的顶点数据（由 Rust 引擎计算）
         int posAndNorSize = vertexCount * 12;
@@ -899,10 +946,12 @@ public class MMDModelOpenGL implements IMMDModel {
     static class Material {
         int tex;
         boolean hasAlpha;
+        boolean ownsTexture;
 
         Material() {
             tex = 0;
             hasAlpha = false;
+            ownsTexture = false;
         }
     }
 

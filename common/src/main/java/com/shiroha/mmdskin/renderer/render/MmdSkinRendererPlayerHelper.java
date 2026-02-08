@@ -14,7 +14,7 @@ public class MmdSkinRendererPlayerHelper {
     public static void ResetPhysics(Player player) {
         // 从配置获取玩家选择的模型
         String playerName = player.getName().getString();
-        String selectedModel = com.shiroha.mmdskin.ui.ModelSelectorConfig.getInstance().getPlayerModel(playerName);
+        String selectedModel = com.shiroha.mmdskin.ui.config.ModelSelectorConfig.getInstance().getPlayerModel(playerName);
         
         // 如果是默认渲染，不处理
         if (selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME) || selectedModel.isEmpty()) {
@@ -35,7 +35,7 @@ public class MmdSkinRendererPlayerHelper {
     public static void CustomAnim(Player player, String id) {
         // 从配置获取玩家选择的模型
         String playerName = player.getName().getString();
-        String selectedModel = com.shiroha.mmdskin.ui.ModelSelectorConfig.getInstance().getPlayerModel(playerName);
+        String selectedModel = com.shiroha.mmdskin.ui.config.ModelSelectorConfig.getInstance().getPlayerModel(playerName);
         
         // 如果是默认渲染，不处理
         if (selectedModel.equals(UIConstants.DEFAULT_MODEL_NAME) || selectedModel.isEmpty()) {

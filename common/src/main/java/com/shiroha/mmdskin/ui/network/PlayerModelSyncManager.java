@@ -1,7 +1,9 @@
-package com.shiroha.mmdskin.ui;
+package com.shiroha.mmdskin.ui.network;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 
 import java.util.Map;
 import java.util.UUID;

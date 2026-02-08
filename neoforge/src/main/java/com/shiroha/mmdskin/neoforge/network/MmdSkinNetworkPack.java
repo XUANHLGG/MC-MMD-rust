@@ -5,7 +5,7 @@ import java.util.UUID;
 import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
-import com.shiroha.mmdskin.ui.PlayerModelSyncManager;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;

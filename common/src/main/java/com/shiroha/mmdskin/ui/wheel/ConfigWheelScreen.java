@@ -1,4 +1,7 @@
-package com.shiroha.mmdskin.ui;
+package com.shiroha.mmdskin.ui.wheel;
+
+import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
+import com.shiroha.mmdskin.ui.selector.ModelSelectorScreen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;

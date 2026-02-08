@@ -1,4 +1,9 @@
-package com.shiroha.mmdskin.ui;
+package com.shiroha.mmdskin.ui.wheel;
+
+import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
+import com.shiroha.mmdskin.ui.config.MorphWheelConfig;
+import com.shiroha.mmdskin.ui.config.MorphWheelConfigScreen;
+import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
@@ -101,6 +106,9 @@ public class MorphWheelScreen extends Screen {
     }
     
     private String getMorphFilePath(MorphWheelConfig.MorphEntry entry) {
+        if (entry.source == null) {
+            return PathConstants.getCustomMorphPath(entry.morphName);
+        }
         switch (entry.source) {
             case "DEFAULT":
                 return PathConstants.getDefaultMorphPath(entry.morphName);
@@ -110,6 +118,7 @@ public class MorphWheelScreen extends Screen {
                 if (entry.modelName != null) {
                     return PathConstants.getModelMorphPath(entry.modelName, entry.morphName);
                 }
+                return PathConstants.getCustomMorphPath(entry.morphName);
             default:
                 return PathConstants.getCustomMorphPath(entry.morphName);
         }
@@ -408,12 +417,12 @@ public class MorphWheelScreen extends Screen {
         }
         
         MMDModelManager.Model m = MMDModelManager.GetModel(selectedModel, playerName);
-        if (m == null) {
-            logger.warn("未找到玩家模型: {}", selectedModel);
+        if (m == null || !(m instanceof MMDModelManager.ModelWithEntityData)) {
+            logger.warn("未找到玩家模型或模型类型不匹配: {}", selectedModel);
             return;
         }
         
-        long modelHandle = m.model.GetModelLong();
+        long modelHandle = ((MMDModelManager.ModelWithEntityData) m).model.GetModelLong();
         NativeFunc nf = NativeFunc.GetInst();
         
         if ("__reset__".equals(slot.morphName)) {

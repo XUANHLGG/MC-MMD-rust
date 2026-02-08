@@ -59,10 +59,7 @@ public class SkinningComputeShader {
     private static final int BINDING_SKINNED_POSITIONS = 7;
     private static final int BINDING_SKINNED_NORMALS = 8;
     
-    // 骨骼矩阵 SSBO（由本类管理，顺序 upload→dispatch 保证多模型安全）
-    private int boneMatrixSSBO = 0;
-    
-    
+
     // Compute Shader 源码
     private static final String COMPUTE_SHADER_SOURCE = """
         #version 430 core
@@ -220,11 +217,6 @@ public class SkinningComputeShader {
             morphCountLocation = GL43C.glGetUniformLocation(program, "MorphCount");
             maxBonesLocation = GL43C.glGetUniformLocation(program, "MaxBones");
             
-            // 创建骨骼矩阵 SSBO
-            boneMatrixSSBO = GL46C.glGenBuffers();
-            GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
-            GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, (long) MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
-            
             initialized = true;
             logger.info("蒙皮 Compute Shader 初始化成功");
             return true;
@@ -264,6 +256,7 @@ public class SkinningComputeShader {
      * @param boneWgtBuffer       骨骼权重 VBO
      * @param outSkinnedPosBuffer 输出蒙皮后位置缓冲区
      * @param outSkinnedNorBuffer 输出蒙皮后法线缓冲区
+     * @param boneMatrixSSBO      骨骼矩阵 SSBO（每实例独立）
      * @param morphOffsetsSSBO    Morph 偏移 SSBO（每实例独立）
      * @param morphWeightsSSBO    Morph 权重 SSBO（每实例独立）
      * @param vertexCount         顶点数量
@@ -272,6 +265,7 @@ public class SkinningComputeShader {
     public void dispatch(int origPosBuffer, int origNorBuffer,
                          int boneIdxBuffer, int boneWgtBuffer,
                          int outSkinnedPosBuffer, int outSkinnedNorBuffer,
+                         int boneMatrixSSBO,
                          int morphOffsetsSSBO, int morphWeightsSSBO,
                          int vertexCount, int morphCount) {
         if (!initialized || program == 0) return;
@@ -289,8 +283,12 @@ public class SkinningComputeShader {
         GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_INDICES, boneIdxBuffer);
         GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_WEIGHTS, boneWgtBuffer);
         GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_MATRICES, boneMatrixSSBO);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_OFFSETS, morphOffsetsSSBO);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_WEIGHTS, morphWeightsSSBO);
+        if (morphCount > 0 && morphOffsetsSSBO != 0) {
+            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_OFFSETS, morphOffsetsSSBO);
+        }
+        if (morphCount > 0 && morphWeightsSSBO != 0) {
+            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_WEIGHTS, morphWeightsSSBO);
+        }
         GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_POSITIONS, outSkinnedPosBuffer);
         GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_NORMALS, outSkinnedNorBuffer);
         
@@ -311,16 +309,18 @@ public class SkinningComputeShader {
     }
     
     /**
-     * 上传骨骼矩阵到 SSBO
+     * 上传骨骼矩阵到指定 SSBO（每实例独立）
      */
-    public void uploadBoneMatrices(FloatBuffer matrices, int boneCount) {
+    public void uploadBoneMatrices(int boneMatrixSSBO, FloatBuffer matrices, int boneCount) {
         if (!initialized || boneMatrixSSBO == 0) return;
         
         GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, boneMatrixSSBO);
         int actualBones = Math.min(boneCount, MAX_BONES);
+        int savedLimit = matrices.limit();
         matrices.limit(actualBones * 16);
         matrices.position(0);
         GL46C.glBufferSubData(GL43C.GL_SHADER_STORAGE_BUFFER, 0, matrices);
+        matrices.limit(savedLimit);
         GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
     }
     
@@ -365,6 +365,18 @@ public class SkinningComputeShader {
     public boolean isInitialized() {
         return initialized;
     }
+
+    /**
+     * 创建骨骼矩阵 SSBO（每模型实例独立）
+     * 调用方负责管理生命周期
+     */
+    public static int createBoneMatrixBuffer() {
+        int ssbo = GL46C.glGenBuffers();
+        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, ssbo);
+        GL46C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, (long) MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, 0);
+        return ssbo;
+    }
     
     /**
      * 释放资源
@@ -373,10 +385,6 @@ public class SkinningComputeShader {
         if (program > 0) {
             GL43C.glDeleteProgram(program);
             program = 0;
-        }
-        if (boneMatrixSSBO > 0) {
-            GL46C.glDeleteBuffers(boneMatrixSSBO);
-            boneMatrixSSBO = 0;
         }
         initialized = false;
     }

@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.renderer.model;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
+import com.shiroha.mmdskin.renderer.core.EyeTrackingHelper;
 import com.shiroha.mmdskin.renderer.core.RenderContext;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
 
@@ -11,6 +12,7 @@ import com.mojang.blaze3d.vertex.MeshData;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -57,6 +59,12 @@ public class MMDModelNativeRender implements IMMDModel {
     
     // 材质
     Material[] mats;
+
+    // 模型名称缓存
+    private String cachedModelName;
+
+    // 预分配临时对象（避免每帧分配）
+    private final Quaternionf tempQuat = new Quaternionf();
     
     // 时间追踪
     private long lastUpdateTime = -1;
@@ -146,7 +154,10 @@ public class MMDModelNativeRender implements IMMDModel {
             result.indexElementSize = indexElementSize;
             result.mats = mats;
             result.subMeshVertexBuffers = subMeshVertexBuffers;
-            
+
+            // 启用自动眨眼
+            nf.SetAutoBlinkEnabled(model, true);
+
             logger.info("原生渲染模型加载成功: 顶点={}, 索引={}, 子网格={}", vertexCount, idxCount, subMeshCount);
             return result;
             
@@ -211,6 +222,8 @@ public class MMDModelNativeRender implements IMMDModel {
         float posZ = (float)(Mth.lerp(tickDelta, entityIn.zo, entityIn.getZ()) * MODEL_SCALE);
         float bodyYaw = Mth.lerp(tickDelta, entityIn.yBodyRotO, entityIn.yBodyRot) * ((float) Math.PI / 180F);
         nf.SetModelPositionAndYaw(model, posX, posY, posZ, bodyYaw);
+
+        EyeTrackingHelper.updateEyeTracking(nf, model, entityIn, entityYaw, tickDelta, getModelName());
         
         Update();
         RenderModel(entityIn, entityYaw, entityPitch, entityTrans, poseStack, packedLight, context);
@@ -241,10 +254,11 @@ public class MMDModelNativeRender implements IMMDModel {
         
         // 变换矩阵
         poseStack.pushPose();
-        poseStack.mulPose(new Quaternionf().rotateY(-entityYaw * ((float) Math.PI / 180F)));
-        poseStack.mulPose(new Quaternionf().rotateX(entityPitch * ((float) Math.PI / 180F)));
+        poseStack.mulPose(tempQuat.identity().rotateY(-entityYaw * ((float) Math.PI / 180F)));
+        poseStack.mulPose(tempQuat.identity().rotateX(entityPitch * ((float) Math.PI / 180F)));
         poseStack.translate(entityTrans.x, entityTrans.y, entityTrans.z);
-        poseStack.scale(0.09f, 0.09f, 0.09f);
+        float baseScale = 0.09f * com.shiroha.mmdskin.config.ModelConfigManager.getConfig(getModelName()).modelScale;
+        poseStack.scale(baseScale, baseScale, baseScale);
         
         // MC 1.21.1 相机修复：重建模型视图矩阵
         // pushPose 内修改会在 popPose 时恢复，不影响原始 PoseStack
@@ -373,9 +387,14 @@ public class MMDModelNativeRender implements IMMDModel {
         vb.bind();
         vb.upload(rendered);
         
+        ShaderInstance shader = RenderSystem.getShader();
+        if (shader == null) {
+            VertexBuffer.unbind();
+            return;
+        }
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
         Matrix4f projection = RenderSystem.getProjectionMatrix();
-        vb.drawWithShader(modelView, projection, RenderSystem.getShader());
+        vb.drawWithShader(modelView, projection, shader);
         
         VertexBuffer.unbind();
     }
@@ -409,6 +428,14 @@ public class MMDModelNativeRender implements IMMDModel {
     @Override
     public String GetModelDir() {
         return modelDir;
+    }
+    
+    @Override
+    public String getModelName() {
+        if (cachedModelName == null) {
+            cachedModelName = IMMDModel.super.getModelName();
+        }
+        return cachedModelName;
     }
     
     // 内部材质类
