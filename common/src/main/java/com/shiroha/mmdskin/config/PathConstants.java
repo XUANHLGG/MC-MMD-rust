@@ -29,6 +29,9 @@ public final class PathConstants {
     /** 自定义动画目录名称 */
     public static final String CUSTOM_ANIM_DIR = "CustomAnim";
     
+    /** 舞台动画目录名称（存放相机 VMD 文件） */
+    public static final String STAGE_ANIM_DIR = "StageAnim";
+    
     // ==================== 表情目录 ====================
     /** 默认表情目录名称 */
     public static final String DEFAULT_MORPH_DIR = "DefaultMorph";
@@ -52,6 +55,9 @@ public final class PathConstants {
     
     /** 主配置文件 */
     public static final String MAIN_CONFIG = "config.json";
+    
+    /** 舞台模式配置文件 */
+    public static final String STAGE_CONFIG = "stage_config.json";
     
     // ==================== 文件扩展名 ====================
     /** VMD 动画文件扩展名 */
@@ -137,6 +143,13 @@ public final class PathConstants {
      */
     public static File getCustomAnimDir() {
         return new File(getSkinRootDir(), CUSTOM_ANIM_DIR);
+    }
+    
+    /**
+     * 获取舞台动画目录
+     */
+    public static File getStageAnimDir() {
+        return new File(getSkinRootDir(), STAGE_ANIM_DIR);
     }
     
     /**

@@ -139,8 +139,6 @@ public class ActionWheelConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
-        
         // 标题
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, COLOR_TEXT_PRIMARY);
         
@@ -323,6 +321,10 @@ public class ActionWheelConfigScreen extends Screen {
         this.minecraft.setScreen(parent);
     }
     
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
     @Override
     public boolean isPauseScreen() {
         return false;

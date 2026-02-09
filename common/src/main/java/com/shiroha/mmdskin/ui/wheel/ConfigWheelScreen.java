@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.ui.wheel;
 
 import com.shiroha.mmdskin.ui.selector.MaterialVisibilityScreen;
 import com.shiroha.mmdskin.ui.selector.ModelSelectorScreen;
+import com.shiroha.mmdskin.ui.stage.StageSelectScreen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
@@ -76,6 +77,9 @@ public class ConfigWheelScreen extends Screen {
         configSlots.add(new ConfigSlot("material", 
             Component.translatable("gui.mmdskin.config.material_control").getString(),
             "👕", this::openMaterialVisibility));
+        configSlots.add(new ConfigSlot("stage",
+            Component.translatable("gui.mmdskin.config.stage_mode").getString(),
+            "🎥", this::openStageSelect));
         configSlots.add(new ConfigSlot("settings", 
             Component.translatable("gui.mmdskin.config.mod_settings").getString(),
             "⚙", this::openModSettings));
@@ -401,6 +405,10 @@ public class ConfigWheelScreen extends Screen {
             Minecraft.getInstance().gui.getChat().addMessage(
                 Component.literal("§c未找到玩家模型，请先选择一个MMD模型"));
         }
+    }
+    
+    private void openStageSelect() {
+        Minecraft.getInstance().setScreen(new StageSelectScreen());
     }
     
     private void openModSettings() {

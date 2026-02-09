@@ -320,6 +320,10 @@ public class MaterialVisibilityScreen extends Screen {
     }
     
     @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }

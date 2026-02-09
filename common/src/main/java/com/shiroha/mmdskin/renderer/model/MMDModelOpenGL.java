@@ -88,6 +88,12 @@ public class MMDModelOpenGL implements IMMDModel {
     int indexType;
     Material[] mats;
     Material lightMapMaterial;
+    
+    // 材质 Morph 结果
+    private FloatBuffer materialMorphResultsBuffer;
+    private ByteBuffer materialMorphResultsByteBuffer;
+    private int materialMorphResultCount = 0;
+    
     final Vector3f light0Direction = new Vector3f();
     final Vector3f light1Direction = new Vector3f();
     private final Quaternionf tempQuat = new Quaternionf();
@@ -258,6 +264,16 @@ public class MMDModelOpenGL implements IMMDModel {
         result.light0Buff = MemoryUtil.memAllocFloat(3);
         result.light1Buff = MemoryUtil.memAllocFloat(3);
         
+        // 初始化材质 Morph 结果缓冲区
+        int matMorphCount = nf.GetMaterialMorphResultCount(model);
+        if (matMorphCount > 0) {
+            int floatCount = matMorphCount * 28;
+            result.materialMorphResultCount = matMorphCount;
+            result.materialMorphResultsBuffer = MemoryUtil.memAllocFloat(floatCount);
+            result.materialMorphResultsByteBuffer = MemoryUtil.memAlloc(floatCount * 4);
+            result.materialMorphResultsByteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        }
+        
         // 启用自动眨眼
         nf.SetAutoBlinkEnabled(model, true);
         
@@ -284,6 +300,14 @@ public class MMDModelOpenGL implements IMMDModel {
         if (light1Buff != null) {
             MemoryUtil.memFree(light1Buff);
             light1Buff = null;
+        }
+        if (materialMorphResultsBuffer != null) {
+            MemoryUtil.memFree(materialMorphResultsBuffer);
+            materialMorphResultsBuffer = null;
+        }
+        if (materialMorphResultsByteBuffer != null) {
+            MemoryUtil.memFree(materialMorphResultsByteBuffer);
+            materialMorphResultsByteBuffer = null;
         }
 
         // 释放自建的 lightMap 纹理（来自 MMDTextureManager 的不在此删除）
@@ -339,6 +363,32 @@ public class MMDModelOpenGL implements IMMDModel {
         RenderModel(entityIn, entityYaw, entityPitch, entityTrans, mat, context);
     }
 
+    /**
+     * 从 Rust 端获取材质 Morph 结果
+     */
+    private void fetchMaterialMorphResults() {
+        if (materialMorphResultCount <= 0 || materialMorphResultsBuffer == null) return;
+        
+        materialMorphResultsByteBuffer.clear();
+        nf.CopyMaterialMorphResultsToBuffer(model, materialMorphResultsByteBuffer);
+        materialMorphResultsBuffer.clear();
+        materialMorphResultsByteBuffer.position(0);
+        materialMorphResultsBuffer.put(materialMorphResultsByteBuffer.asFloatBuffer());
+        materialMorphResultsBuffer.flip();
+    }
+    
+    /**
+     * 获取指定材质的 Morph diffuse alpha 乘数
+     */
+    private float getMaterialMorphAlpha(int materialIndex) {
+        if (materialMorphResultsBuffer == null || materialIndex >= materialMorphResultCount) return 1.0f;
+        int offset = materialIndex * 28 + 3;
+        if (offset < materialMorphResultsBuffer.capacity()) {
+            return materialMorphResultsBuffer.get(offset);
+        }
+        return 1.0f;
+    }
+    
     @Override
     public void ChangeAnim(long anim, long layer) {
         nf.ChangeModelAnim(model, anim, layer);
@@ -451,6 +501,9 @@ public class MMDModelOpenGL implements IMMDModel {
             }
         }
         
+        // 获取材质 Morph 结果
+        fetchMaterialMorphResults();
+        
         // 检查是否启用 Toon 渲染
         boolean useToon = ConfigManager.isToonRenderingEnabled();
         if (useToon) {
@@ -495,77 +548,57 @@ public class MMDModelOpenGL implements IMMDModel {
         RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
         RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 
-        // Position
+        // === 上传顶点数据到 VBO（每个 VBO 只上传一次）===
         int posAndNorSize = vertexCount * 12; // float * 3
         long posData = nf.GetPoss(model);
         nf.CopyDataToByteBuffer(posBuffer, posData, posAndNorSize);
-        if (positionLocation != -1) {
-            GL46C.glEnableVertexAttribArray(positionLocation);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_STATIC_DRAW);
-            GL46C.glVertexAttribPointer(positionLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
-        }
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_DYNAMIC_DRAW);
 
-        // Normal
         long normalData = nf.GetNormals(model);
         nf.CopyDataToByteBuffer(norBuffer, normalData, posAndNorSize);
-        if (normalLocation != -1) {
-            GL46C.glEnableVertexAttribArray(normalLocation);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_STATIC_DRAW);
-            GL46C.glVertexAttribPointer(normalLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
-        }
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_DYNAMIC_DRAW);
 
-        // UV0
         int uv0Size = vertexCount * 8; // float * 2
         long uv0Data = nf.GetUVs(model);
         nf.CopyDataToByteBuffer(uv0Buffer, uv0Data, uv0Size);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_DYNAMIC_DRAW);
+
+        uv1Buffer.position(0);
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv1BufferObject);
+        GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv1Buffer, GL46C.GL_STATIC_DRAW);
+
+        // === UV2 和 Color：所有顶点值相同，使用常量顶点属性（避免逐顶点循环和缓冲区上传）===
+        int blockBrightness = 16 * blockLight;
+        int skyBrightness = Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
+        if (uv2Location != -1) GL46C.glVertexAttribI4i(uv2Location, blockBrightness, skyBrightness, 0, 0);
+        if (K_uv2Location != -1) GL46C.glVertexAttribI4i(K_uv2Location, blockBrightness, skyBrightness, 0, 0);
+        if (I_uv2Location != -1) GL46C.glVertexAttribI4i(I_uv2Location, blockBrightness, skyBrightness, 0, 0);
+        if (colorLocation != -1) GL46C.glVertexAttrib4f(colorLocation, lightIntensity, lightIntensity, lightIntensity, 1.0f);
+        if (I_colorLocation != -1) GL46C.glVertexAttrib4f(I_colorLocation, lightIntensity, lightIntensity, lightIntensity, 1.0f);
+
+        // === 绑定顶点属性（数据已在 VBO 中，只需设置指针）===
+        if (positionLocation != -1) {
+            GL46C.glEnableVertexAttribArray(positionLocation);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
+            GL46C.glVertexAttribPointer(positionLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
+        }
+        if (normalLocation != -1) {
+            GL46C.glEnableVertexAttribArray(normalLocation);
+            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
+            GL46C.glVertexAttribPointer(normalLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
+        }
         if (uv0Location != -1) {
             GL46C.glEnableVertexAttribArray(uv0Location);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(uv0Location, 2, GL46C.GL_FLOAT, false, 0, 0);
         }
-
-        // UV2 (光照)
-        int blockBrightness = 16 * blockLight;
-        int skyBrightness = Math.round((15.0f - skyDarken) * (skyLight / 15.0f) * 16);
-        uv2Buffer.clear();
-        for (int i = 0; i < vertexCount; i++) {
-            uv2Buffer.putInt(blockBrightness);
-            uv2Buffer.putInt(skyBrightness);
-        }
-        uv2Buffer.flip();
-        if (uv2Location != -1) {
-            GL46C.glEnableVertexAttribArray(uv2Location);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2BufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv2Buffer, GL46C.GL_STATIC_DRAW);
-            GL46C.glVertexAttribIPointer(uv2Location, 2, GL46C.GL_INT, 0, 0);
-        }
-
-        // UV1
-        uv1Buffer.position(0);
         if (uv1Location != -1) {
             GL46C.glEnableVertexAttribArray(uv1Location);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv1BufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv1Buffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribIPointer(uv1Location, 2, GL46C.GL_INT, 0, 0);
-        }
-
-        // Color (应用光照强度)
-        colorBuffer.clear();
-        for (int i = 0; i < vertexCount; i++) {
-            colorBuffer.putFloat(lightIntensity);
-            colorBuffer.putFloat(lightIntensity);
-            colorBuffer.putFloat(lightIntensity);
-            colorBuffer.putFloat(1.0f);
-        }
-        colorBuffer.flip();
-        if (colorLocation != -1) {
-            GL46C.glEnableVertexAttribArray(colorLocation);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, colorBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, colorBuffer, GL46C.GL_DYNAMIC_DRAW);
-            GL46C.glVertexAttribPointer(colorLocation, 4, GL46C.GL_FLOAT, false, 0, 0);
         }
 
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);
@@ -612,30 +645,21 @@ public class MMDModelOpenGL implements IMMDModel {
             }
         }
 
-        // K_* 属性（自定义着色器属性）
+        // K_* 属性（自定义着色器属性）— 复用已上传的 VBO，无需重复 glBufferData
         if (K_positionLocation != -1) {
             GL46C.glEnableVertexAttribArray(K_positionLocation);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(K_positionLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
         }
         if (K_normalLocation != -1) {
             GL46C.glEnableVertexAttribArray(K_normalLocation);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(K_normalLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
         }
         if (K_uv0Location != -1) {
             GL46C.glEnableVertexAttribArray(K_uv0Location);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(K_uv0Location, 2, GL46C.GL_FLOAT, false, 0, 0);
-        }
-        if (K_uv2Location != -1) {
-            GL46C.glEnableVertexAttribArray(K_uv2Location);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2BufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv2Buffer, GL46C.GL_STATIC_DRAW);
-            GL46C.glVertexAttribIPointer(K_uv2Location, 2, GL46C.GL_INT, 0, 0);
         }
         if(K_projMatLocation != -1){
             projMatBuff.position(0);
@@ -659,36 +683,21 @@ public class MMDModelOpenGL implements IMMDModel {
         if(KAIMyLocationF != -1)
             GL46C.glUniform1i(KAIMyLocationF, 1);
 
-        // Iris 属性
+        // Iris 属性 — 复用已上传的 VBO，无需重复 glBufferData
         if (I_positionLocation != -1) {
             GL46C.glEnableVertexAttribArray(I_positionLocation);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, vertexBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, posBuffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(I_positionLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
         }
         if (I_normalLocation != -1) {
             GL46C.glEnableVertexAttribArray(I_normalLocation);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, normalBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, norBuffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(I_normalLocation, 3, GL46C.GL_FLOAT, false, 0, 0);
         }
         if (I_uv0Location != -1) {
             GL46C.glEnableVertexAttribArray(I_uv0Location);
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, texcoordBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv0Buffer, GL46C.GL_STATIC_DRAW);
             GL46C.glVertexAttribPointer(I_uv0Location, 2, GL46C.GL_FLOAT, false, 0, 0);
-        }
-        if (I_uv2Location != -1) {
-            GL46C.glEnableVertexAttribArray(I_uv2Location);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2BufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, uv2Buffer, GL46C.GL_STATIC_DRAW);
-            GL46C.glVertexAttribIPointer(I_uv2Location, 2, GL46C.GL_INT, 0, 0);
-        }
-        if (I_colorLocation != -1) {
-            GL46C.glEnableVertexAttribArray(I_colorLocation);
-            GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, colorBufferObject);
-            GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, colorBuffer, GL46C.GL_DYNAMIC_DRAW);
-            GL46C.glVertexAttribPointer(I_colorLocation, 4, GL46C.GL_FLOAT, false, 0, 0);
         }
 
         //Draw
@@ -702,7 +711,8 @@ public class MMDModelOpenGL implements IMMDModel {
                 continue;
             
             float alpha = nf.GetMaterialAlpha(model, materialID);
-            if (alpha == 0.0f)
+            float morphAlpha = getMaterialMorphAlpha(materialID);
+            if (alpha * morphAlpha < 0.001f)
                 continue;
 
             if (nf.GetMaterialBothFace(model, materialID)) {
@@ -907,7 +917,8 @@ public class MMDModelOpenGL implements IMMDModel {
             if (!nf.IsMaterialVisible(model, materialID)) continue;
             
             float alpha = nf.GetMaterialAlpha(model, materialID);
-            if (alpha == 0.0f) continue;
+            float morphAlpha = getMaterialMorphAlpha(materialID);
+            if (alpha * morphAlpha < 0.001f) continue;
             
             if (nf.GetMaterialBothFace(model, materialID)) {
                 RenderSystem.disableCull();

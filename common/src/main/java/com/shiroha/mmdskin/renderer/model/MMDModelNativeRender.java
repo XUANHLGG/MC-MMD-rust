@@ -26,6 +26,8 @@ import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 
 /**
  * 使用 Minecraft 原生渲染系统的 MMD 模型渲染器
@@ -59,6 +61,11 @@ public class MMDModelNativeRender implements IMMDModel {
     
     // 材质
     Material[] mats;
+    
+    // 材质 Morph 结果
+    private FloatBuffer materialMorphResultsBuffer;
+    private ByteBuffer materialMorphResultsByteBuffer;
+    private int materialMorphResultCount = 0;
 
     // 模型名称缓存
     private String cachedModelName;
@@ -155,6 +162,16 @@ public class MMDModelNativeRender implements IMMDModel {
             result.mats = mats;
             result.subMeshVertexBuffers = subMeshVertexBuffers;
 
+            // 初始化材质 Morph 结果缓冲区
+            int matMorphCount = nf.GetMaterialMorphResultCount(model);
+            if (matMorphCount > 0) {
+                int floatCount = matMorphCount * 28;
+                result.materialMorphResultCount = matMorphCount;
+                result.materialMorphResultsBuffer = MemoryUtil.memAllocFloat(floatCount);
+                result.materialMorphResultsByteBuffer = MemoryUtil.memAlloc(floatCount * 4);
+                result.materialMorphResultsByteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+            }
+
             // 启用自动眨眼
             nf.SetAutoBlinkEnabled(model, true);
 
@@ -180,6 +197,14 @@ public class MMDModelNativeRender implements IMMDModel {
         if (uv0Buffer != null) {
             MemoryUtil.memFree(uv0Buffer);
             uv0Buffer = null;
+        }
+        if (materialMorphResultsBuffer != null) {
+            MemoryUtil.memFree(materialMorphResultsBuffer);
+            materialMorphResultsBuffer = null;
+        }
+        if (materialMorphResultsByteBuffer != null) {
+            MemoryUtil.memFree(materialMorphResultsByteBuffer);
+            materialMorphResultsByteBuffer = null;
         }
         if (subMeshVertexBuffers != null) {
             for (VertexBuffer vb : subMeshVertexBuffers) {
@@ -304,6 +329,9 @@ public class MMDModelNativeRender implements IMMDModel {
         norBuffer.rewind();
         uv0Buffer.rewind();
         
+        // 获取材质 Morph 结果
+        fetchMaterialMorphResults();
+        
         // 启用混合和深度测试
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
@@ -317,7 +345,8 @@ public class MMDModelNativeRender implements IMMDModel {
             
             if (!nf.IsMaterialVisible(model, materialID)) continue;
             float alpha = nf.GetMaterialAlpha(model, materialID);
-            if (alpha == 0.0f) continue;
+            float morphAlpha = getMaterialMorphAlpha(materialID);
+            if (alpha * morphAlpha < 0.001f) continue;
             
             int startIndex = nf.GetSubMeshBeginIndex(model, i);
             int vertCount = nf.GetSubMeshVertexCount(model, i);
@@ -397,6 +426,32 @@ public class MMDModelNativeRender implements IMMDModel {
         vb.drawWithShader(modelView, projection, shader);
         
         VertexBuffer.unbind();
+    }
+    
+    /**
+     * 从 Rust 端获取材质 Morph 结果
+     */
+    private void fetchMaterialMorphResults() {
+        if (materialMorphResultCount <= 0 || materialMorphResultsBuffer == null) return;
+        
+        materialMorphResultsByteBuffer.clear();
+        nf.CopyMaterialMorphResultsToBuffer(model, materialMorphResultsByteBuffer);
+        materialMorphResultsBuffer.clear();
+        materialMorphResultsByteBuffer.position(0);
+        materialMorphResultsBuffer.put(materialMorphResultsByteBuffer.asFloatBuffer());
+        materialMorphResultsBuffer.flip();
+    }
+    
+    /**
+     * 获取指定材质的 Morph diffuse alpha 乘数
+     */
+    private float getMaterialMorphAlpha(int materialIndex) {
+        if (materialMorphResultsBuffer == null || materialIndex >= materialMorphResultCount) return 1.0f;
+        int offset = materialIndex * 28 + 3;
+        if (offset < materialMorphResultsBuffer.capacity()) {
+            return materialMorphResultsBuffer.get(offset);
+        }
+        return 1.0f;
     }
     
     @Override

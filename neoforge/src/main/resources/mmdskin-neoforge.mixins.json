@@ -6,7 +6,9 @@
   "refmap": "mmdskin-neoforge-refmap.json",
   "mixins": [],
   "client": [
-    "NeoForgePlayerRendererMixin"
+    "NeoForgePlayerRendererMixin",
+    "CameraMixin",
+    "GameRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
