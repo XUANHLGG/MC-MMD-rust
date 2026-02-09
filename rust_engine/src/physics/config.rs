@@ -183,11 +183,11 @@ impl Default for PhysicsConfig {
             // 最大线速度（米/秒）
             // 超过这个速度会被强制限制，防止物理爆炸
             // 注意：人物移动速度约 4-6 方块/秒，需要设置足够大
-            max_linear_velocity: 1.0,
+            max_linear_velocity: 5.0,
             
             // 最大角速度（弧度/秒）
             // 同上
-            max_angular_velocity: 1.0,
+            max_angular_velocity: 5.0,
 
             // ====== 胸部物理（独立参数组）======
             // 胸部刚体需要比头发更高的弹簧刚度来保持形状，
