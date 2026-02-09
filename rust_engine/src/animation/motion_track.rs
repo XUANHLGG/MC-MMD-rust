@@ -3,7 +3,7 @@
 //! 存储单个骨骼或 Morph 的所有关键帧，并提供查找和插值功能
 
 use std::collections::BTreeMap;
-use glam::{Vec3, Quat};
+use glam::{Mat4, Vec3, Quat};
 
 use super::bezier_curve::BezierCurveFactory;
 use super::interpolation::{
