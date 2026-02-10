@@ -379,76 +379,11 @@ public class MMDModelNativeRender implements IMMDModel {
         RenderSystem.enableDepthTest();
         RenderSystem.defaultBlendFunc();
 
-        // G3 优化：批量获取所有子网格元数据（1 次 JNI 替代 ~4×N 次/帧）
-        subMeshDataBuf.clear();
-        nf.BatchGetSubMeshData(model, subMeshDataBuf);
-        
-        // 按子网格渲染
-        for (int i = 0; i < subMeshCount; i++) {
-            int base = i * 20;
-            int materialID  = subMeshDataBuf.getInt(base);
-            float alpha     = subMeshDataBuf.getFloat(base + 12);
-            boolean visible = subMeshDataBuf.get(base + 16) != 0;
-            boolean bothFace= subMeshDataBuf.get(base + 17) != 0;
-
-            if (!visible) continue;
-            if (getEffectiveMaterialAlpha(materialID, alpha) < 0.001f) continue;
-
-            renderSubMesh(poseStack, packedLight, materialID, bothFace, i, mc);
-        }
-
-        poseStack.popPose();
-    }
-    
-    /**
-     * P2-9: 使用 Rust 构建的 MC 顶点数据 + 自定义 VAO/VBO 渲染子网格
-     *
-     * 替代旧的 BufferBuilder 逐顶点循环：
-     * - Rust 侧完成 SoA→AoS 转换 + 矩阵变换 + 格式打包（1 次 JNI 调用）
-     * - Java 侧仅上传 + 绑定着色器 + 绘制
-     */
-    private void renderSubMesh(PoseStack poseStack, int packedLight, int materialID, boolean bothFace, int subMeshIndex, Minecraft mc) {
-        // 设置纹理
-        if (mats[materialID].tex != 0) {
-            RenderSystem.setShaderTexture(0, mats[materialID].tex);
-        } else {
-            RenderSystem.setShaderTexture(0, mc.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId());
-        }
-
         // 使用 Minecraft 原生着色器（Iris 会正确拦截）
         RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
-
-        // 双面渲染（bothFace 已从 subMeshDataBuf 批量获取）
-        if (bothFace) {
-            RenderSystem.disableCull();
-        } else {
-            RenderSystem.enableCull();
-        }
-
-        // P2-9 核心：Rust 直接构建 MC NEW_ENTITY 格式的交错顶点数据
-        int overlayPacked = 0 | (10 << 16); // OverlayTexture.pack(0, 10)
-        mcVertexBuf.clear();
-        int written = nf.BuildMCVertexBuffer(
-            model, subMeshIndex, mcVertexBuf,
-            poseMatBuf, normalMatBuf,
-            0xFFFFFFFF, overlayPacked, packedLight
-        );
-        if (written <= 0) return;
-        mcVertexBuf.position(0).limit(written * 36);
-
-        // 上传到 VBO
-        GL46C.glBindVertexArray(vao);
-        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, subMeshVBOs[subMeshIndex]);
-        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, mcVertexBuf);
-
-        // 设置 NEW_ENTITY 格式的顶点属性指针（stride = 36 bytes）
-        DefaultVertexFormat.NEW_ENTITY.setupBufferState();
-
-        // 获取着色器并设置 uniform
         ShaderInstance shader = RenderSystem.getShader();
         if (shader == null) {
-            DefaultVertexFormat.NEW_ENTITY.clearBufferState();
-            GL46C.glBindVertexArray(0);
+            poseStack.popPose();
             return;
         }
 
@@ -469,16 +404,85 @@ public class MMDModelNativeRender implements IMMDModel {
         if (shader.FOG_SHAPE != null) shader.FOG_SHAPE.set(RenderSystem.getShaderFogShape().getIndex());
         if (shader.TEXTURE_MATRIX != null) shader.TEXTURE_MATRIX.set(RenderSystem.getTextureMatrix());
         if (shader.GAME_TIME != null) shader.GAME_TIME.set(RenderSystem.getShaderGameTime());
-
+        
+        // 绑定 VAO（一次）并应用着色器
+        GL46C.glBindVertexArray(vao);
         shader.apply();
+        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        
+        // G3 优化：批量获取所有子网格元数据（1 次 JNI 替代 ~4×N 次/帧）
+        subMeshDataBuf.clear();
+        nf.BatchGetSubMeshData(model, subMeshDataBuf);
+        
+        // 按子网格渲染
+        for (int i = 0; i < subMeshCount; i++) {
+            int base = i * 20;
+            int materialID  = subMeshDataBuf.getInt(base);
+            float alpha     = subMeshDataBuf.getFloat(base + 12);
+            boolean visible = subMeshDataBuf.get(base + 16) != 0;
+            boolean bothFace= subMeshDataBuf.get(base + 17) != 0;
+
+            if (!visible) continue;
+            if (getEffectiveMaterialAlpha(materialID, alpha) < 0.001f) continue;
+
+            renderSubMesh(packedLight, materialID, bothFace, i, mc);
+        }
+
+        // === 清理（一次，与 MMDModelOpenGL/GpuSkinning 保持一致）===
+        DefaultVertexFormat.NEW_ENTITY.clearBufferState();
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, 0);
+        GL46C.glBindVertexArray(0);
+        RenderSystem.activeTexture(GL46C.GL_TEXTURE0);
+        shader.clear();
+        BufferUploader.reset();
+        
+        poseStack.popPose();
+    }
+    
+    /**
+     * P2-9: 使用 Rust 构建的 MC 顶点数据 + 自定义 VAO/VBO 渲染子网格
+     *
+     * 着色器和 VAO 由调用者（RenderModel）管理（一次 apply/clear），此方法仅处理：
+     * - 纹理绑定（RenderSystem 更新 Iris 纹理追踪 + glBindTexture 更新实际 GL 绑定）
+     * - 面剔除设置
+     * - Rust 顶点构建 + VBO 上传 + 绘制
+     */
+    private void renderSubMesh(int packedLight, int materialID, boolean bothFace, int subMeshIndex, Minecraft mc) {
+        // 设置纹理（RenderSystem 更新 Iris 纹理追踪 + glBindTexture 更新实际 GL 绑定）
+        int texId;
+        if (mats[materialID].tex != 0) {
+            texId = mats[materialID].tex;
+        } else {
+            texId = mc.getTextureManager().getTexture(TextureManager.INTENTIONAL_MISSING_TEXTURE).getId();
+        }
+        RenderSystem.setShaderTexture(0, texId);
+        GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, texId);
+
+        // 双面渲染（bothFace 已从 subMeshDataBuf 批量获取）
+        if (bothFace) {
+            RenderSystem.disableCull();
+        } else {
+            RenderSystem.enableCull();
+        }
+
+        // P2-9 核心：Rust 直接构建 MC NEW_ENTITY 格式的交错顶点数据
+        int overlayPacked = 0 | (10 << 16); // OverlayTexture.pack(0, 10)
+        mcVertexBuf.clear();
+        int written = nf.BuildMCVertexBuffer(
+            model, subMeshIndex, mcVertexBuf,
+            poseMatBuf, normalMatBuf,
+            0xFFFFFFFF, overlayPacked, packedLight
+        );
+        if (written <= 0) return;
+        mcVertexBuf.position(0).limit(written * 36);
+
+        // 上传到 VBO 并设置顶点属性指针（stride = 36 bytes）
+        GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, subMeshVBOs[subMeshIndex]);
+        GL46C.glBufferSubData(GL46C.GL_ARRAY_BUFFER, 0, mcVertexBuf);
+        DefaultVertexFormat.NEW_ENTITY.setupBufferState();
 
         // 绘制（不使用索引，顶点已由 Rust 展开）
         GL46C.glDrawArrays(GL46C.GL_TRIANGLES, 0, written);
-
-        // 清理
-        shader.clear();
-        DefaultVertexFormat.NEW_ENTITY.clearBufferState();
-        GL46C.glBindVertexArray(0);
     }
     
     @Override

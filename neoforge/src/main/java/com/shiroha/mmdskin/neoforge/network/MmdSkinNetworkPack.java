@@ -13,8 +13,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.fml.loading.FMLEnvironment;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -84,11 +83,16 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
     
     public static void handle(MmdSkinNetworkPack pack, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            if (FMLEnvironment.dist == Dist.CLIENT) {
-                pack.handleClient();
+            if (ctx.player() instanceof ServerPlayer sender) {
+                // 服务器端（含局域网）：转发给除发送者外的所有客户端
+                for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
+                    if (!player.equals(sender)) {
+                        PacketDistributor.sendToPlayer(player, pack);
+                    }
+                }
             } else {
-                // 服务器端：转发给所有客户端
-                PacketDistributor.sendToAllPlayers(pack);
+                // 客户端：处理收到的包
+                pack.handleClient();
             }
         });
     }
