@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.renderer.camera;
 
 import javazoom.jl.decoder.*;
+import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.openal.AL10;
@@ -28,6 +29,55 @@ import java.nio.file.Files;
  * - 通过独立 OpenAL Source 播放，不干扰 MC 自身的音频系统
  */
 public class StageAudioPlayer {
+    /**
+     * 已存在的实例管理（针对本地玩家或远程玩家）
+     */
+    private static final java.util.Map<java.util.UUID, StageAudioPlayer> REMOTE_PLAYERS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static StageAudioPlayer instance = null;
+
+    /**
+     * 获取单例（用于本地玩家）
+     */
+    public static StageAudioPlayer getInstance() {
+        if (instance == null) {
+            instance = new StageAudioPlayer();
+        }
+        return instance;
+    }
+
+    /**
+     * 播放远程玩家的音频
+     */
+    public static void playRemoteAudio(Player player, String filePath) {
+        if (player == null || filePath == null) return;
+        
+        StageAudioPlayer sap = REMOTE_PLAYERS.computeIfAbsent(player.getUUID(), k -> new StageAudioPlayer());
+        if (sap.load(filePath)) {
+            sap.play();
+        }
+    }
+
+    /**
+     * 停止并移除远程玩家的音频播放器
+     */
+    public static void stopRemoteAudio(java.util.UUID uuid) {
+        StageAudioPlayer sap = REMOTE_PLAYERS.remove(uuid);
+        if (sap != null) {
+            sap.cleanup();
+        }
+    }
+
+    /**
+     * 清理所有远程玩家的音频
+     */
+    public static void cleanupAll() {
+        REMOTE_PLAYERS.values().forEach(StageAudioPlayer::cleanup);
+        REMOTE_PLAYERS.clear();
+        if (instance != null) {
+            instance.cleanup();
+        }
+    }
+
     private static final Logger logger = LogManager.getLogger();
     
     // OpenAL 资源
