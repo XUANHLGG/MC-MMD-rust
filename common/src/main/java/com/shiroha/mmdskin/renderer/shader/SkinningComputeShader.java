@@ -8,6 +8,8 @@ import org.lwjgl.opengl.GL46C;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 
+import static com.shiroha.mmdskin.renderer.shader.ShaderConstants.MAX_BONES;
+
 /**
  * GPU 蒙皮 Compute Shader
  * 
@@ -35,9 +37,6 @@ public class SkinningComputeShader {
     private static final Logger logger = LogManager.getLogger();
     
     private static final int LOCAL_SIZE_X = 256;
-    
-    // 最大骨骼数量
-    public static int MAX_BONES = 2048;
     
     // Compute Shader 程序
     private int program = 0;
@@ -223,37 +222,51 @@ public class SkinningComputeShader {
         """;
     
     /**
+     * 蒙皮 dispatch 参数对象，替代 16 个散装 int 参数
+     */
+    public record DispatchParams(
+            // 输入缓冲区
+            int origPosBuffer, int origNorBuffer,
+            int boneIdxBuffer, int boneWgtBuffer, int origUvBuffer,
+            // 输出缓冲区
+            int outSkinnedPosBuffer, int outSkinnedNorBuffer, int outSkinnedUvBuffer,
+            // 骨骼
+            int boneMatrixSSBO,
+            // 顶点 Morph
+            int morphOffsetsSSBO, int morphWeightsSSBO, int morphCount,
+            // UV Morph
+            int uvMorphOffsetsSSBO, int uvMorphWeightsSSBO, int uvMorphCount,
+            // 参数
+            int vertexCount
+    ) {
+        /** 无 UV Morph 的便捷构造 */
+        public static DispatchParams withoutUvMorph(
+                int origPosBuffer, int origNorBuffer,
+                int boneIdxBuffer, int boneWgtBuffer,
+                int outSkinnedPosBuffer, int outSkinnedNorBuffer,
+                int boneMatrixSSBO,
+                int morphOffsetsSSBO, int morphWeightsSSBO,
+                int vertexCount, int morphCount) {
+            return new DispatchParams(
+                    origPosBuffer, origNorBuffer,
+                    boneIdxBuffer, boneWgtBuffer, 0,
+                    outSkinnedPosBuffer, outSkinnedNorBuffer, 0,
+                    boneMatrixSSBO,
+                    morphOffsetsSSBO, morphWeightsSSBO, morphCount,
+                    0, 0, -1,
+                    vertexCount);
+        }
+    }
+    
+    /**
      * 初始化 Compute Shader
      */
     public boolean init() {
         if (initialized) return true;
         
         try {
-            int computeShader = GL43C.glCreateShader(GL43C.GL_COMPUTE_SHADER);
-            GL43C.glShaderSource(computeShader, COMPUTE_SHADER_SOURCE);
-            GL43C.glCompileShader(computeShader);
-            
-            if (GL43C.glGetShaderi(computeShader, GL43C.GL_COMPILE_STATUS) == GL43C.GL_FALSE) {
-                String log = GL43C.glGetShaderInfoLog(computeShader, 8192).trim();
-                logger.error("蒙皮 Compute Shader 编译失败: {}", log);
-                GL43C.glDeleteShader(computeShader);
-                return false;
-            }
-            
-            program = GL43C.glCreateProgram();
-            GL43C.glAttachShader(program, computeShader);
-            GL43C.glLinkProgram(program);
-            
-            if (GL43C.glGetProgrami(program, GL43C.GL_LINK_STATUS) == GL43C.GL_FALSE) {
-                String log = GL43C.glGetProgramInfoLog(program, 8192).trim();
-                logger.error("蒙皮 Compute Shader 链接失败: {}", log);
-                GL43C.glDeleteProgram(program);
-                GL43C.glDeleteShader(computeShader);
-                program = 0;
-                return false;
-            }
-            
-            GL43C.glDeleteShader(computeShader);
+            program = ShaderCompiler.compileComputeProgram(COMPUTE_SHADER_SOURCE, "蒙皮 Compute Shader");
+            if (program == 0) return false;
             
             // 获取 Uniform locations
             vertexCountLocation = GL43C.glGetUniformLocation(program, "VertexCount");
@@ -292,34 +305,9 @@ public class SkinningComputeShader {
     }
     
     /**
-     * 执行蒙皮计算（含 UV Morph）
-     * 
-     * @param origPosBuffer       原始顶点位置 VBO
-     * @param origNorBuffer       原始顶点法线 VBO
-     * @param boneIdxBuffer       骨骼索引 VBO
-     * @param boneWgtBuffer       骨骼权重 VBO
-     * @param outSkinnedPosBuffer 输出蒙皮后位置缓冲区
-     * @param outSkinnedNorBuffer 输出蒙皮后法线缓冲区
-     * @param boneMatrixSSBO      骨骼矩阵 SSBO
-     * @param morphOffsetsSSBO    顶点 Morph 偏移 SSBO
-     * @param morphWeightsSSBO    顶点 Morph 权重 SSBO
-     * @param vertexCount         顶点数量
-     * @param morphCount          顶点 Morph 数量
-     * @param origUvBuffer        原始 UV VBO
-     * @param uvMorphOffsetsSSBO  UV Morph 偏移 SSBO
-     * @param uvMorphWeightsSSBO  UV Morph 权重 SSBO
-     * @param outSkinnedUvBuffer  输出蒙皮后 UV 缓冲区
-     * @param uvMorphCount        UV Morph 数量
+     * 执行蒙皮计算
      */
-    public void dispatch(int origPosBuffer, int origNorBuffer,
-                         int boneIdxBuffer, int boneWgtBuffer,
-                         int outSkinnedPosBuffer, int outSkinnedNorBuffer,
-                         int boneMatrixSSBO,
-                         int morphOffsetsSSBO, int morphWeightsSSBO,
-                         int vertexCount, int morphCount,
-                         int origUvBuffer,
-                         int uvMorphOffsetsSSBO, int uvMorphWeightsSSBO,
-                         int outSkinnedUvBuffer, int uvMorphCount) {
+    public void dispatch(DispatchParams p) {
         if (!initialized || program == 0) return;
         
         int savedProgram = GL46C.glGetInteger(GL46C.GL_CURRENT_PROGRAM);
@@ -327,36 +315,36 @@ public class SkinningComputeShader {
         
         GL43C.glUseProgram(program);
         
-        if (vertexCountLocation >= 0) GL43C.glUniform1i(vertexCountLocation, vertexCount);
-        if (morphCountLocation >= 0) GL43C.glUniform1i(morphCountLocation, morphCount);
+        if (vertexCountLocation >= 0) GL43C.glUniform1i(vertexCountLocation, p.vertexCount());
+        if (morphCountLocation >= 0) GL43C.glUniform1i(morphCountLocation, p.morphCount());
         if (maxBonesLocation >= 0) GL43C.glUniform1i(maxBonesLocation, MAX_BONES);
-        if (uvMorphCountLocation >= 0) GL43C.glUniform1i(uvMorphCountLocation, uvMorphCount);
+        if (uvMorphCountLocation >= 0) GL43C.glUniform1i(uvMorphCountLocation, p.uvMorphCount());
         
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_ORIG_POSITIONS, origPosBuffer);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_ORIG_NORMALS, origNorBuffer);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_INDICES, boneIdxBuffer);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_WEIGHTS, boneWgtBuffer);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_MATRICES, boneMatrixSSBO);
-        if (morphCount > 0 && morphOffsetsSSBO != 0) {
-            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_OFFSETS, morphOffsetsSSBO);
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_ORIG_POSITIONS, p.origPosBuffer());
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_ORIG_NORMALS, p.origNorBuffer());
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_INDICES, p.boneIdxBuffer());
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_WEIGHTS, p.boneWgtBuffer());
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_BONE_MATRICES, p.boneMatrixSSBO());
+        if (p.morphCount() > 0 && p.morphOffsetsSSBO() != 0) {
+            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_OFFSETS, p.morphOffsetsSSBO());
         }
-        if (morphCount > 0 && morphWeightsSSBO != 0) {
-            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_WEIGHTS, morphWeightsSSBO);
+        if (p.morphCount() > 0 && p.morphWeightsSSBO() != 0) {
+            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_MORPH_WEIGHTS, p.morphWeightsSSBO());
         }
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_POSITIONS, outSkinnedPosBuffer);
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_NORMALS, outSkinnedNorBuffer);
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_POSITIONS, p.outSkinnedPosBuffer());
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_NORMALS, p.outSkinnedNorBuffer());
         
         // UV 相关 SSBO
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_ORIG_UVS, origUvBuffer);
-        if (uvMorphCount > 0 && uvMorphOffsetsSSBO != 0) {
-            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_UV_MORPH_OFFSETS, uvMorphOffsetsSSBO);
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_ORIG_UVS, p.origUvBuffer());
+        if (p.uvMorphCount() > 0 && p.uvMorphOffsetsSSBO() != 0) {
+            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_UV_MORPH_OFFSETS, p.uvMorphOffsetsSSBO());
         }
-        if (uvMorphCount > 0 && uvMorphWeightsSSBO != 0) {
-            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_UV_MORPH_WEIGHTS, uvMorphWeightsSSBO);
+        if (p.uvMorphCount() > 0 && p.uvMorphWeightsSSBO() != 0) {
+            GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_UV_MORPH_WEIGHTS, p.uvMorphWeightsSSBO());
         }
-        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_UVS, outSkinnedUvBuffer);
+        GL43C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, BINDING_SKINNED_UVS, p.outSkinnedUvBuffer());
         
-        int groupCount = (vertexCount + LOCAL_SIZE_X - 1) / LOCAL_SIZE_X;
+        int groupCount = (p.vertexCount() + LOCAL_SIZE_X - 1) / LOCAL_SIZE_X;
         GL43C.glDispatchCompute(groupCount, 1, 1);
         
         GL43C.glMemoryBarrier(GL43C.GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
@@ -366,32 +354,13 @@ public class SkinningComputeShader {
     }
     
     /**
-     * 执行蒙皮计算（无 UV Morph 的兼容版本）
-     */
-    public void dispatch(int origPosBuffer, int origNorBuffer,
-                         int boneIdxBuffer, int boneWgtBuffer,
-                         int outSkinnedPosBuffer, int outSkinnedNorBuffer,
-                         int boneMatrixSSBO,
-                         int morphOffsetsSSBO, int morphWeightsSSBO,
-                         int vertexCount, int morphCount) {
-        // 无 UV 处理：传 -1 作为 uvMorphCount 哨兵值，shader 中跳过 UV 读写
-        dispatch(origPosBuffer, origNorBuffer,
-                 boneIdxBuffer, boneWgtBuffer,
-                 outSkinnedPosBuffer, outSkinnedNorBuffer,
-                 boneMatrixSSBO,
-                 morphOffsetsSSBO, morphWeightsSSBO,
-                 vertexCount, morphCount,
-                 0, 0, 0, 0, -1);
-    }
-    
-    /**
      * 上传骨骼矩阵到指定 SSBO（每实例独立）
      */
     public void uploadBoneMatrices(int boneMatrixSSBO, FloatBuffer matrices, int boneCount) {
         if (!initialized || boneMatrixSSBO == 0) return;
         
         GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, boneMatrixSSBO);
-        int actualBones = Math.min(boneCount, MAX_BONES);
+        int actualBones = Math.min(boneCount, ShaderConstants.MAX_BONES);
         int savedLimit = matrices.limit();
         matrices.limit(actualBones * 16);
         matrices.position(0);
@@ -493,7 +462,7 @@ public class SkinningComputeShader {
     public static int createBoneMatrixBuffer() {
         int ssbo = GL46C.glGenBuffers();
         GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, ssbo);
-        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
+        GL46C.glBufferData(GL46C.GL_COPY_WRITE_BUFFER, (long) ShaderConstants.MAX_BONES * 64, GL46C.GL_DYNAMIC_DRAW);
         GL46C.glBindBuffer(GL46C.GL_COPY_WRITE_BUFFER, 0);
         return ssbo;
     }

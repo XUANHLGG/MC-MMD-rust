@@ -5,6 +5,8 @@ import java.util.UUID;
 import com.shiroha.mmdskin.fabric.register.MmdSkinRegisterCommon;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.renderer.render.MorphSyncHelper;
+import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -122,7 +124,7 @@ public class MmdSkinNetworkPack {
                 if (MCinstance.level == null) return;
                 Player target = MCinstance.level.getPlayerByUUID(playerUUID);
                 if (target != null)
-                    MmdSkinRendererPlayerHelper.RemoteMorph(target, data);
+                    MorphSyncHelper.applyRemoteMorph(target, data);
                 break;
             }
             case 7: {
@@ -130,7 +132,7 @@ public class MmdSkinNetworkPack {
                 if (MCinstance.level == null) return;
                 Player stageTarget = MCinstance.level.getPlayerByUUID(playerUUID);
                 if (stageTarget != null)
-                    MmdSkinRendererPlayerHelper.StageAnim(stageTarget, data);
+                    StageAnimSyncHelper.startStageAnim(stageTarget, data);
                 break;
             }
             case 8: {
@@ -138,7 +140,7 @@ public class MmdSkinNetworkPack {
                 if (MCinstance.level == null) return;
                 Player target = MCinstance.level.getPlayerByUUID(playerUUID);
                 if (target != null)
-                    MmdSkinRendererPlayerHelper.StageAnimEnd(target);
+                    StageAnimSyncHelper.endStageAnim(target);
                 break;
             }
         }

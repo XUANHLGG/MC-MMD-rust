@@ -612,7 +612,7 @@ public class StageSelectScreen extends Screen {
             if (modelName != null && !modelName.isEmpty()) {
                 MMDModelManager.Model modelData = MMDModelManager.GetModel(modelName, playerName);
                 if (modelData != null) {
-                    modelHandle = modelData.model.GetModelLong();
+                    modelHandle = modelData.model.getModelHandle();
                     nf.TransitionLayerTo(modelHandle, 0, mergedAnim, 0.3f);
                 }
             }

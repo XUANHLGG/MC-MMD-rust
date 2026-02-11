@@ -85,11 +85,7 @@ public class MaterialVisibilityScreen extends Screen {
             return null;
         }
         
-        if (model instanceof MMDModelManager.ModelWithEntityData mwed) {
-            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), modelName);
-        }
-        
-        return null;
+        return new MaterialVisibilityScreen(model.model.getModelHandle(), modelName);
     }
     
     /**
@@ -104,12 +100,8 @@ public class MaterialVisibilityScreen extends Screen {
             return null;
         }
         
-        if (model instanceof MMDModelManager.ModelWithEntityData mwed) {
-            String displayName = maidName != null ? maidName : "女仆";
-            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), displayName);
-        }
-        
-        return null;
+        String displayName = maidName != null ? maidName : "女仆";
+        return new MaterialVisibilityScreen(model.model.getModelHandle(), displayName);
     }
     
     /**

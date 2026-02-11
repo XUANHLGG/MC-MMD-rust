@@ -6,6 +6,8 @@ import java.util.function.Supplier;
 import com.shiroha.mmdskin.forge.register.MmdSkinRegisterCommon;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.renderer.render.MorphSyncHelper;
+import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
@@ -169,19 +171,19 @@ public class MmdSkinNetworkPack {
             case 6: {
                 // 表情同步
                 if (target != null)
-                    MmdSkinRendererPlayerHelper.RemoteMorph(target, animId);
+                    MorphSyncHelper.applyRemoteMorph(target, animId);
                 break;
             }
             case 7: {
                 // 舞台动画开始
                 if (target != null)
-                    MmdSkinRendererPlayerHelper.StageAnim(target, animId);
+                    StageAnimSyncHelper.startStageAnim(target, animId);
                 break;
             }
             case 8: {
                 // 舞台动画结束
                 if (target != null)
-                    MmdSkinRendererPlayerHelper.StageAnimEnd(target);
+                    StageAnimSyncHelper.endStageAnim(target);
                 break;
             }
         }

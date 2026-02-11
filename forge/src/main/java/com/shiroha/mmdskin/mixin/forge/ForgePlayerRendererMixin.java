@@ -12,7 +12,7 @@ import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.core.RenderContext;
 import com.shiroha.mmdskin.renderer.core.RenderParams;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.model.MMDModelManager.ModelWithEntityData;
+import com.shiroha.mmdskin.renderer.model.MMDModelManager.Model;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.PlayerModel;
@@ -89,25 +89,24 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
             return;
         }
         
-        ModelWithEntityData modelWithData = (ModelWithEntityData) modelData;
-        IMMDModel model = modelWithData.model;
+        IMMDModel model = modelData.model;
         
         // 加载模型属性
-        modelWithData.loadModelProperties(MmdSkinClient.reloadProperties);
+        modelData.loadModelProperties(MmdSkinClient.reloadProperties);
         
         // 获取模型尺寸
-        float[] size = getModelSize(modelWithData);
+        float[] size = getModelSize(modelData);
         
         // 第一人称模式管理（阶段一：管理头部隐藏状态，在 render 之前）
         float combinedScale = size[0] * ModelConfigManager.getConfig(selectedModel).modelScale;
-        FirstPersonManager.preRender(NativeFunc.GetInst(), model.GetModelLong(), combinedScale, isLocalPlayer);
+        FirstPersonManager.preRender(NativeFunc.GetInst(), model.getModelHandle(), combinedScale, isLocalPlayer);
         boolean isFirstPerson = isLocalPlayer && FirstPersonManager.isActive();
         
         // 更新动画状态（委托给 AnimationStateManager）
-        AnimationStateManager.updateAnimationState(player, modelWithData);
+        AnimationStateManager.updateAnimationState(player, modelData);
         
         // 计算渲染参数
-        RenderParams params = calculateRenderParams(player, modelWithData, tickDelta);
+        RenderParams params = calculateRenderParams(player, modelData, tickDelta);
         
         // 渲染模型
         if (InventoryRenderHelper.isInventoryScreen()) {
@@ -123,11 +122,11 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
         
         // 第一人称模式（阶段二：render 之后获取当前帧的眼睛骨骼位置）
         if (isFirstPerson) {
-            FirstPersonManager.postRender(NativeFunc.GetInst(), model.GetModelLong());
+            FirstPersonManager.postRender(NativeFunc.GetInst(), model.getModelHandle());
         }
         
         // 渲染手持物品（委托给 ItemRenderHelper）
-        ItemRenderHelper.renderItems(player, modelWithData, matrixStack, vertexConsumers, packedLight);
+        ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
         
         // 取消原版渲染
         ci.cancel();
@@ -136,7 +135,7 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
     /**
      * 计算渲染参数
      */
-    private RenderParams calculateRenderParams(AbstractClientPlayer player, ModelWithEntityData modelData, float tickDelta) {
+    private RenderParams calculateRenderParams(AbstractClientPlayer player, Model modelData, float tickDelta) {
         RenderParams params = new RenderParams();
         params.bodyYaw = Mth.rotLerp(tickDelta, player.yBodyRotO, player.yBodyRot);
         params.bodyPitch = 0.0f;
@@ -164,7 +163,7 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
     /**
      * 获取模型尺寸
      */
-    private float[] getModelSize(ModelWithEntityData modelData) {
+    private float[] getModelSize(Model modelData) {
         float[] size = new float[2];
         size[0] = getPropertyFloat(modelData, "size", 1.0f);
         size[1] = getPropertyFloat(modelData, "size_in_inventory", 1.0f);
@@ -174,15 +173,20 @@ public abstract class ForgePlayerRendererMixin extends LivingEntityRenderer<Abst
     /**
      * 获取属性浮点值
      */
-    private float getPropertyFloat(ModelWithEntityData modelData, String key, float defaultValue) {
+    private float getPropertyFloat(Model modelData, String key, float defaultValue) {
         String value = modelData.properties.getProperty(key);
-        return value == null ? defaultValue : Float.parseFloat(value);
+        if (value == null) return defaultValue;
+        try {
+            return Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
     
     /**
      * 获取属性向量值
      */
-    private Vector3f getPropertyVector(ModelWithEntityData modelData, String key) {
+    private Vector3f getPropertyVector(Model modelData, String key) {
         String value = modelData.properties.getProperty(key);
         return value == null ? new Vector3f(0.0f) : MmdSkinClient.str2Vec3f(value);
     }

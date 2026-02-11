@@ -9,12 +9,8 @@ import java.nio.FloatBuffer;
 /**
  * Toon 着色器抽象基类
  * 
- * 提取 GPU 蒙皮版本（ToonShader）和 CPU 蒙皮版本（ToonShaderCpu）的公共逻辑：
- * - 共享的片段着色器代码
- * - 共享的 uniform 设置方法
- * - 共享的着色器编译辅助方法
- * 
- * 子类负责提供各自的顶点着色器（蒙皮方式不同）
+ * 提供 Toon 渲染的公共逻辑（片段着色器、uniform 管理），
+ * 子类负责提供各自的顶点着色器（蒙皮方式不同）。
  */
 public abstract class ToonShaderBase {
     protected static final Logger logger = LogManager.getLogger();
@@ -26,10 +22,7 @@ public abstract class ToonShaderBase {
     
     // ==================== 共享的片段着色器逻辑 ====================
     
-    /**
-     * 获取 GLSL 版本声明，子类可覆盖
-     * GPU 版本需要 460 来支持 SSBO，CPU 版本用 330 即可
-     */
+    /** 获取 GLSL 版本声明，子类可覆盖 */
     protected String getGlslVersion() {
         return "#version 330 core";
     }
@@ -178,10 +171,7 @@ public abstract class ToonShaderBase {
     
     // ==================== 抽象方法（子类实现） ====================
     
-    /**
-     * 获取主着色器的顶点着色器源码
-     * GPU 版本包含骨骼蒙皮逻辑，CPU 版本直接使用已蒙皮的顶点
-     */
+    /** 获取主着色器的顶点着色器源码 */
     protected abstract String getMainVertexShader();
     
     /**
@@ -273,49 +263,10 @@ public abstract class ToonShaderBase {
         outlineNormalLocation = GL46C.glGetAttribLocation(outlineProgram, "Normal");
     }
     
-    // ==================== 着色器编译辅助方法 ====================
+    // ==================== 着色器编译（委托 ShaderCompiler） ====================
     
     protected int compileProgram(String vertexSource, String fragmentSource, String name) {
-        int vertexShader = GL46C.glCreateShader(GL46C.GL_VERTEX_SHADER);
-        GL46C.glShaderSource(vertexShader, vertexSource);
-        GL46C.glCompileShader(vertexShader);
-        
-        if (GL46C.glGetShaderi(vertexShader, GL46C.GL_COMPILE_STATUS) == GL46C.GL_FALSE) {
-            String log = GL46C.glGetShaderInfoLog(vertexShader, 8192).trim();
-            logger.error("{}顶点着色器编译失败: {}", name, log);
-            GL46C.glDeleteShader(vertexShader);
-            return 0;
-        }
-        
-        int fragShader = GL46C.glCreateShader(GL46C.GL_FRAGMENT_SHADER);
-        GL46C.glShaderSource(fragShader, fragmentSource);
-        GL46C.glCompileShader(fragShader);
-        
-        if (GL46C.glGetShaderi(fragShader, GL46C.GL_COMPILE_STATUS) == GL46C.GL_FALSE) {
-            String log = GL46C.glGetShaderInfoLog(fragShader, 8192).trim();
-            logger.error("{}片段着色器编译失败: {}", name, log);
-            GL46C.glDeleteShader(vertexShader);
-            GL46C.glDeleteShader(fragShader);
-            return 0;
-        }
-        
-        int program = GL46C.glCreateProgram();
-        GL46C.glAttachShader(program, vertexShader);
-        GL46C.glAttachShader(program, fragShader);
-        GL46C.glLinkProgram(program);
-        
-        if (GL46C.glGetProgrami(program, GL46C.GL_LINK_STATUS) == GL46C.GL_FALSE) {
-            String log = GL46C.glGetProgramInfoLog(program, 8192);
-            logger.error("{}链接失败: {}", name, log);
-            GL46C.glDeleteProgram(program);
-            GL46C.glDeleteShader(vertexShader);
-            GL46C.glDeleteShader(fragShader);
-            return 0;
-        }
-        
-        GL46C.glDeleteShader(vertexShader);
-        GL46C.glDeleteShader(fragShader);
-        return program;
+        return ShaderCompiler.compileRenderProgram(vertexSource, fragmentSource, name);
     }
     
     // ==================== 公共 Uniform 设置方法 ====================

@@ -91,6 +91,9 @@ public class MMDModelManager {
      * 3. 后台完成 → 下一帧检测到 Future 完成 → 执行 Phase 2（GL 资源创建，在渲染线程）→ 放入缓存
      */
     public static Model GetModel(String modelName, String cacheKey) {
+        // 定期检查延迟清理（从渲染器移至此处，每帧至少调用一次）
+        modelCache.tick(MMDModelManager::disposeModel);
+        
         String fullCacheKey = modelName + "_" + cacheKey;
         
         // 1. 缓存命中
@@ -442,8 +445,8 @@ public class MMDModelManager {
         m.modelName = modelName;
         m.entityData = new EntityAnimState(3);
         
-        model.ResetPhysics();
-        model.ChangeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
+        model.resetPhysics();
+        model.changeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
         return m;
     }
     
@@ -492,8 +495,8 @@ public class MMDModelManager {
             MMDAnimManager.DeleteModel(model.model);
             
             // 释放 EntityAnimState 资源
-            if (model instanceof ModelWithEntityData med && med.entityData != null) {
-                med.entityData.dispose();
+            if (model.entityData != null) {
+                model.entityData.dispose();
             }
         } catch (Exception e) {
             logger.error("删除模型失败", e);
@@ -502,6 +505,7 @@ public class MMDModelManager {
     
     public static class Model {
         public IMMDModel model;
+        public EntityAnimState entityData;
         String entityName;
         String modelName;
         public Properties properties = new Properties();
@@ -531,7 +535,8 @@ public class MMDModelManager {
         } 
     }
 
+    /** @deprecated 已合并到 Model，保留为类型别名以兼容 fabric/forge Mixin 引用 */
+    @Deprecated
     public static class ModelWithEntityData extends Model {
-        public EntityAnimState entityData;
     }
 }
