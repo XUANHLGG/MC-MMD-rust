@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.fabric.YsmCompat;
 import com.shiroha.mmdskin.renderer.animation.AnimationStateManager;
 import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
@@ -16,6 +17,7 @@ import com.shiroha.mmdskin.renderer.render.InventoryRenderHelper;
 import com.shiroha.mmdskin.renderer.render.ItemRenderHelper;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.GameRenderer;
@@ -56,15 +58,35 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
                       MultiBufferSource vertexConsumers, int packedLight, CallbackInfo ci) {
         // 获取玩家选择的模型（使用同步管理器，支持联机）
         String playerName = player.getName().getString();
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         boolean isLocalPlayer = mc.player != null && mc.player.getUUID().equals(player.getUUID());
+        
+        // 如果开启了 MMD 第一人称渲染，且当前是本地玩家的第一人称视角
+        if (isLocalPlayer && FirstPersonManager.shouldRenderFirstPerson()) {
+            String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
+            
+            // 核心优先级调整：
+            // 如果 YSM 激活了（isYsmActive 会检查 YSM 的“阻止自身模型渲染”开关）
+            // 只要 YSM 处于活跃状态，我们就把渲染权完全交给 YSM，MMD 此时应该避让。
+            if (YsmCompat.isYsmActive(player)) {
+                ci.cancel();
+                return;
+            }
+
+            // 如果 MMD 没选模型，或者是原版渲染模式，或者玩家是观察者
+            if (selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)") || player.isSpectator()) {
+                ci.cancel();
+                return;
+            }
+        }
+
         String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
         
-        // 如果选择了默认渲染或未选择模型，使用原版渲染
-        if (selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)")) {
-            super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
-            return;
-        }
+        // 如果选择了默认渲染或未选择模型，或 YSM 模型处于活跃状态，或处于旁观模式，使用原版渲染
+         if (selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)") || YsmCompat.isYsmActive(player) || player.isSpectator()) {
+             super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
+             return;
+         }
         
         // 加载模型（使用玩家名作为缓存键）
         MMDModelManager.Model modelData = MMDModelManager.GetModel(selectedModel, playerName);

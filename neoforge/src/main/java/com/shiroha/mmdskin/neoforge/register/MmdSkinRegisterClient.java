@@ -276,6 +276,8 @@ public class MmdSkinRegisterClient {
                     logger.info("玩家加入服务器，广播模型选择: {}", selectedModel);
                     PlayerModelSyncManager.broadcastLocalModelSelection(mc.player.getUUID(), selectedModel);
                 }
+                // 请求所有玩家的模型信息
+                PacketDistributor.sendToServer(MmdSkinNetworkPack.withAnimId(10, mc.player.getUUID(), ""));
             }
         }
         

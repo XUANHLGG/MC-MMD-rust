@@ -7,6 +7,7 @@ import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
+import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
@@ -165,6 +166,22 @@ public class MmdSkinRendererPlayerHelper {
         }
         
         logger.info("[舞台同步] 远程玩家 {} 舞台动画结束", playerName);
+    }
+
+    /**
+     * 远程玩家舞台音频同步
+     */
+    public static void StageAudioPlay(Player player, String audioData) {
+        if (player == null || audioData == null || audioData.isEmpty()) return;
+
+        String[] parts = audioData.split("\\|");
+        if (parts.length >= 2) {
+            String packName = parts[0];
+            String audioName = parts[1];
+            String audioPath = new File(PathConstants.getStageAnimDir(), packName + File.separator + audioName).getAbsolutePath();
+            StageAudioPlayer.playRemoteAudio(player, audioPath);
+            logger.info("[舞台同步] 远程玩家 {} 舞台音频已开始: {}/{}", player.getName().getString(), packName, audioName);
+        }
     }
     
     /**

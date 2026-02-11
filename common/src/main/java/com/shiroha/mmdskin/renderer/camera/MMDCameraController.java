@@ -67,7 +67,7 @@ public class MMDCameraController {
     private long modelHandle = 0;
     
     // 音频播放器
-    private final StageAudioPlayer audioPlayer = new StageAudioPlayer();
+    private final StageAudioPlayer audioPlayer = StageAudioPlayer.getInstance();
     
     // 相机数据
     private final MMDCameraData cameraData = new MMDCameraData();
@@ -114,6 +114,13 @@ public class MMDCameraController {
     public static MMDCameraController getInstance() {
         return INSTANCE;
     }
+
+    /**
+     * 判断是否处于舞台模式（供 Mixin 调用）
+     */
+    public boolean isInStageMode() {
+        return this.state != StageState.INACTIVE;
+    }
     
     // ==================== 生命周期方法 ====================
     
@@ -136,6 +143,11 @@ public class MMDCameraController {
             this.anchorY = mc.player.getY();
             this.anchorZ = mc.player.getZ();
             this.anchorYaw = mc.player.getYRot();
+            // 重置玩家朝向，确保进入舞台时面向正前方
+            mc.player.setXRot(0.0f);
+            mc.player.setYRot(this.anchorYaw);
+            mc.player.yHeadRot = this.anchorYaw;
+            mc.player.yBodyRot = this.anchorYaw;
         }
         
         // 重载模型（清除上次播放的残留姿势，仅本地玩家）
