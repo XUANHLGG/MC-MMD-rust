@@ -55,7 +55,7 @@ public class ModelSettingsScreen extends Screen {
     private int listTop, listBottom;
     
     // 拖拽状态
-    private int draggingSlider = -1;
+    private int draggingSlider = -1; // 正在拖拽的滑条索引，-1 表示无
     
     // 设置项定义
     private static final int SETTING_EYE_TRACKING = 0;
@@ -124,7 +124,7 @@ public class ModelSettingsScreen extends Screen {
         MMDModelManager.Model model = MMDModelManager.GetModel(selectedModel, playerName);
         if (model == null) return;
         
-        long handle = model.model.GetModelLong();
+        long handle = model.model.getModelHandle();
         NativeFunc nf = NativeFunc.GetInst();
         
         nf.SetEyeTrackingEnabled(handle, config.eyeTrackingEnabled);
@@ -148,6 +148,9 @@ public class ModelSettingsScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
     
+    /**
+     * 渲染头部
+     */
     private void renderHeader(GuiGraphics guiGraphics) {
         int cx = panelX + PANEL_WIDTH / 2;
         guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
@@ -158,6 +161,9 @@ public class ModelSettingsScreen extends Screen {
         guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
     }
     
+    /**
+     * 渲染所有设置项
+     */
     private void renderSettings(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         int y = listTop + 4;
         int itemX = panelX + 6;
@@ -194,6 +200,9 @@ public class ModelSettingsScreen extends Screen {
                      itemX, y, itemW, mouseX, mouseY, SETTING_MODEL_SCALE);
     }
     
+    /**
+     * 渲染开关条目
+     */
     private void renderToggle(GuiGraphics guiGraphics, String label, boolean value,
                                int x, int y, int w, int mouseX, int mouseY, int settingId) {
         boolean isHovered = mouseX >= x && mouseX <= x + w 
@@ -203,17 +212,23 @@ public class ModelSettingsScreen extends Screen {
             guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
         }
         
+        // 标签
         guiGraphics.drawString(this.font, label, x + 4, y + (ITEM_HEIGHT - 8) / 2, COLOR_TEXT);
         
+        // 开关
         int toggleX = x + w - TOGGLE_W - 4;
         int toggleY = y + (ITEM_HEIGHT - TOGGLE_H) / 2;
         int toggleColor = value ? COLOR_TOGGLE_ON : COLOR_TOGGLE_OFF;
         guiGraphics.fill(toggleX, toggleY, toggleX + TOGGLE_W, toggleY + TOGGLE_H, toggleColor);
         
+        // 滑块圆点
         int dotX = value ? toggleX + TOGGLE_W - TOGGLE_H : toggleX;
         guiGraphics.fill(dotX + 1, toggleY + 1, dotX + TOGGLE_H - 1, toggleY + TOGGLE_H - 1, 0xFFFFFFFF);
     }
     
+    /**
+     * 渲染滑条条目
+     */
     private void renderSlider(GuiGraphics guiGraphics, String label, float value,
                                float min, float max, int x, int y, int w,
                                int mouseX, int mouseY, int settingId) {
@@ -224,19 +239,24 @@ public class ModelSettingsScreen extends Screen {
             guiGraphics.fill(x, y, x + w, y + ITEM_HEIGHT, COLOR_ITEM_HOVER);
         }
         
+        // 标签
         guiGraphics.drawString(this.font, label, x + 4, y + 2, COLOR_TEXT);
         
+        // 滑条
         int sliderX = x + 4;
         int sliderY = y + 14;
         int sliderW = w - 8;
         
+        // 背景轨道
         guiGraphics.fill(sliderX, sliderY, sliderX + sliderW, sliderY + SLIDER_HEIGHT, COLOR_SLIDER_BG);
         
+        // 填充
         float ratio = (value - min) / (max - min);
         ratio = Math.max(0, Math.min(1, ratio));
         int fillW = (int) (sliderW * ratio);
         guiGraphics.fill(sliderX, sliderY, sliderX + fillW, sliderY + SLIDER_HEIGHT, COLOR_SLIDER_FILL);
         
+        // 滑块
         int thumbX = sliderX + fillW - 2;
         guiGraphics.fill(thumbX, sliderY - 1, thumbX + 4, sliderY + SLIDER_HEIGHT + 1, 0xFFFFFFFF);
     }
@@ -299,6 +319,9 @@ public class ModelSettingsScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
     
+    /**
+     * 根据鼠标位置更新滑条值
+     */
     private void updateSliderValue(double mouseX, int itemX, int itemW) {
         int sliderX = itemX + 4;
         int sliderW = itemW - 8;
@@ -316,11 +339,17 @@ public class ModelSettingsScreen extends Screen {
         }
     }
     
+    /**
+     * 检查鼠标是否在开关区域内
+     */
     private boolean isInToggleArea(double mouseX, double mouseY, int x, int y, int w) {
         return mouseX >= x && mouseX <= x + w 
             && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
     }
     
+    /**
+     * 检查鼠标是否在滑条区域内
+     */
     private boolean isInSliderArea(double mouseX, double mouseY, int x, int y, int w) {
         return mouseX >= x && mouseX <= x + w 
             && mouseY >= y && mouseY <= y + ITEM_HEIGHT;
@@ -340,10 +369,6 @@ public class ModelSettingsScreen extends Screen {
         Minecraft.getInstance().setScreen(parentScreen);
     }
     
-    @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-    }
-
     @Override
     public boolean isPauseScreen() {
         return false;

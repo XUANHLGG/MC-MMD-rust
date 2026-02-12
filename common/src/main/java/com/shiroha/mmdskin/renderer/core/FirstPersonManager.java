@@ -8,7 +8,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -35,7 +34,7 @@ public final class FirstPersonManager {
     
     /** 当前跟踪的模型句柄（用于检测模型切换） */
     private static long trackedModelHandle = 0;
-
+    
     /** 每帧更新的眼睛骨骼动画位置（模型局部空间） */
     private static final float[] eyeBonePos = new float[3];
     
@@ -44,23 +43,19 @@ public final class FirstPersonManager {
 
     /** 记录最后一帧摄像机位置，用于修复十字准星偏移 */
     private static Vec3 lastCameraPos = Vec3.ZERO;
-
+    
     private FirstPersonManager() {}
 
-    /**
-     * 设置最后一帧摄像机位置
-     */
+    /** 设置最后一帧摄像机位置 */
     public static void setLastCameraPos(Vec3 pos) {
         lastCameraPos = pos;
     }
 
-    /**
-     * 获取最后一帧摄像机位置
-     */
+    /** 获取最后一帧摄像机位置 */
     public static Vec3 getLastCameraPos() {
         return lastCameraPos;
     }
-
+    
     /**
      * 判断当前是否应该使用第一人称模型渲染
      * 条件：配置启用 + 游戏处于第一人称视角 + 玩家正在使用 MMD 模型
@@ -77,10 +72,10 @@ public final class FirstPersonManager {
         
         return true;
     }
-
+    
     /**
      * 阶段一：渲染前调用，管理 Rust 侧的头部隐藏状态
-     *
+     * 
      * @param nf NativeFunc 实例
      * @param modelHandle 模型句柄
      * @param modelScale 组合缩放系数（model.properties size × ModelConfigData.modelScale）
@@ -99,27 +94,27 @@ public final class FirstPersonManager {
             trackedModelHandle = modelHandle;
             activeFirstPerson = false;
         }
-
+        
         if (shouldEnable != activeFirstPerson) {
             nf.SetFirstPersonMode(modelHandle, shouldEnable);
             activeFirstPerson = shouldEnable;
-
+            
             if (shouldEnable) {
                 logger.info("第一人称模式启用: modelScale={}", modelScale);
             } else {
                 logger.info("第一人称模式禁用");
             }
         }
-
+        
         // 始终同步缩放值，确保运行时调整缩放后相机位置跟随
         if (shouldEnable) {
             cachedModelScale = modelScale;
         }
     }
-
+    
     /**
      * 阶段二：渲染后调用，获取当前帧骨骼动画更新后的眼睛位置
-     *
+     * 
      * @param nf NativeFunc 实例
      * @param modelHandle 模型句柄
      */
@@ -127,25 +122,25 @@ public final class FirstPersonManager {
         nf.GetEyeBonePosition(modelHandle, eyeBonePos);
         eyeBoneValid = (eyeBonePos[0] != 0.0f || eyeBonePos[1] != 0.0f || eyeBonePos[2] != 0.0f);
     }
-
+    
     /**
      * 获取第一人称模式是否激活
      */
     public static boolean isActive() {
         return activeFirstPerson;
     }
-
+    
     /**
      * 眼睛骨骼位置是否有效（已找到且位置非零）
      */
     public static boolean isEyeBoneValid() {
         return eyeBoneValid;
     }
-
+    
     /**
      * 获取眼睛骨骼在世界空间中的偏移量 [x, y, z]（方块单位）
      * 模型局部空间 → 缩放 → 世界空间偏移
-     *
+     * 
      * @param out 输出数组 [x, y, z]，长度至少 3
      */
     public static void getEyeWorldOffset(float[] out) {
@@ -154,7 +149,7 @@ public final class FirstPersonManager {
         out[1] = eyeBonePos[1] * scale;
         out[2] = eyeBonePos[2] * scale;
     }
-
+    
     /**
      * 获取考虑旋转后的眼睛世界坐标位置
      */
@@ -164,11 +159,9 @@ public final class FirstPersonManager {
         double px = Mth.lerp(partialTick, entity.xo, entity.getX());
         double py = Mth.lerp(partialTick, entity.yo, entity.getY());
         double pz = Mth.lerp(partialTick, entity.zo, entity.getZ());
-        
         // 修复：直接使用实体当前的 bodyYaw 而不是进行 lerp 插值，以解决相机抖动问题
         // bodyYaw 的插值在某些情况下会产生微小的相位差，导致模型坐标与相机坐标不完全同步
         float bodyYaw = entity instanceof LivingEntity le ? le.yBodyRot : entity.getYRot();
-        
         float yawRad = (float) Math.toRadians(bodyYaw);
         double sinYaw = Math.sin(yawRad);
         double cosYaw = Math.cos(yawRad);

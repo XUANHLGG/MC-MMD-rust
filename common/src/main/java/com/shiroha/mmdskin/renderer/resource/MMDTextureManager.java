@@ -52,18 +52,18 @@ public class MMDTextureManager {
             int y = localNf.GetTextureY(nfTex);
             long texData = localNf.GetTextureData(nfTex);
             boolean hasAlpha = localNf.TextureHasAlpha(nfTex);
-
+            
             int texSize = x * y * (hasAlpha ? 4 : 3);
             ByteBuffer pixelBuffer = ByteBuffer.allocateDirect(texSize);
             localNf.CopyDataToByteBuffer(pixelBuffer, texData, texSize);
             pixelBuffer.rewind();
-
+            
             PredecodedTexture predecoded = new PredecodedTexture();
             predecoded.pixelData = pixelBuffer;
             predecoded.width = x;
             predecoded.height = y;
             predecoded.hasAlpha = hasAlpha;
-
+            
             predecodedTextures.put(filename, predecoded);
         } finally {
             localNf.DeleteTexture(nfTex);
@@ -88,7 +88,7 @@ public class MMDTextureManager {
                 textures.put(filename, result);
                 return result;
             }
-
+            
             // 无预解码数据，走原来的全量加载（同步）
             long nfTex = nf.LoadTexture(filename);
             if (nfTex == 0) {

@@ -4,6 +4,8 @@ import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -11,11 +13,12 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import net.minecraft.client.renderer.GameRenderer;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -140,14 +143,14 @@ public class MmdSkinClient {
                 if (!targetFile.getParentFile().exists()){
                     targetFile.getParentFile().mkdirs();
                 }
-                FileOutputStream fos = new FileOutputStream(name);
-                BufferedOutputStream dest = new BufferedOutputStream(fos, BUFFER);
-                while (total + BUFFER <= TOOBIG && (count = zis.read(data, 0, BUFFER)) != -1) {
-                    dest.write(data, 0, count);
-                    total += count;
+                try (FileOutputStream fos = new FileOutputStream(name);
+                     BufferedOutputStream dest = new BufferedOutputStream(fos, BUFFER)) {
+                    while (total + BUFFER <= TOOBIG && (count = zis.read(data, 0, BUFFER)) != -1) {
+                        dest.write(data, 0, count);
+                        total += count;
+                    }
+                    dest.flush();
                 }
-                dest.flush();
-                dest.close();
                 zis.closeEntry();
                 entries++;
                 if (entries > TOOMANY) {
@@ -169,7 +172,7 @@ public class MmdSkinClient {
             skin3DFolder.mkdir();
             String gameDir = PathConstants.getGameDirectory();
             try{
-                FileUtils.copyURLToFile(URI.create(PathConstants.RESOURCE_DOWNLOAD_URL).toURL(), 
+                FileUtils.copyURLToFile(new URL(PathConstants.RESOURCE_DOWNLOAD_URL), 
                     new File(gameDir, PathConstants.RESOURCE_ZIP_NAME), 30000, 30000);
             }catch (IOException e){
                 logger.info("Download 3d-skin.zip failed!");
@@ -206,7 +209,12 @@ public class MmdSkinClient {
     }
     
     public static void drawText(String arg, int x, int y){
-        // MC 1.21.1: RenderSystem.getModelViewStack() 已移除，使用新的渲染 API
-        // 此方法暂不使用，保留空实现
+        //MinecraftClient MCinstance = MinecraftClient.getInstance();
+        PoseStack mat;
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        mat = RenderSystem.getModelViewStack();
+        mat.pushPose();
+        //instance.textRenderer.draw(mat, arg, x, y, -1);
+        mat.popPose();
     }
 }

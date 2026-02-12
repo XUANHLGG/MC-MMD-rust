@@ -139,6 +139,8 @@ public class ActionWheelConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(guiGraphics);
+        
         // 标题
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, COLOR_TEXT_PRIMARY);
         
@@ -288,23 +290,23 @@ public class ActionWheelConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         int leftPanelX = this.width / 2 - PANEL_WIDTH - 30;
         int rightPanelX = this.width / 2 + 30;
         
         // 左侧面板滚动
         if (mouseX >= leftPanelX && mouseX <= leftPanelX + PANEL_WIDTH) {
-            leftScrollOffset = Math.max(0, Math.min(leftMaxScroll, leftScrollOffset - (int)(scrollY * 25)));
+            leftScrollOffset = Math.max(0, Math.min(leftMaxScroll, leftScrollOffset - (int)(delta * 25)));
             return true;
         }
         
         // 右侧面板滚动
         if (mouseX >= rightPanelX && mouseX <= rightPanelX + PANEL_WIDTH) {
-            rightScrollOffset = Math.max(0, Math.min(rightMaxScroll, rightScrollOffset - (int)(scrollY * 25)));
+            rightScrollOffset = Math.max(0, Math.min(rightMaxScroll, rightScrollOffset - (int)(delta * 25)));
             return true;
         }
         
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override
@@ -321,10 +323,6 @@ public class ActionWheelConfigScreen extends Screen {
         this.minecraft.setScreen(parent);
     }
     
-    @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-    }
-
     @Override
     public boolean isPauseScreen() {
         return false;

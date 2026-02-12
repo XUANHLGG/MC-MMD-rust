@@ -33,7 +33,7 @@ public class MaterialVisibilityScreen extends Screen {
     private static final int ITEM_HEIGHT = 14;
     private static final int ITEM_SPACING = 1;
     
-    // 统一简约配色
+    // 统一简约配色（与 ModelSelectorScreen 完全一致）
     private static final int COLOR_PANEL_BG = 0xC0101418;
     private static final int COLOR_PANEL_BORDER = 0xFF2A3A4A;
     private static final int COLOR_ITEM_HOVER = 0x30FFFFFF;
@@ -91,11 +91,7 @@ public class MaterialVisibilityScreen extends Screen {
             return null;
         }
         
-        if (model instanceof MMDModelManager.ModelWithEntityData mwed) {
-            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), modelName, modelName);
-        }
-        
-        return null;
+        return new MaterialVisibilityScreen(model.model.getModelHandle(), modelName, modelName);
     }
     
     /**
@@ -110,14 +106,13 @@ public class MaterialVisibilityScreen extends Screen {
             return null;
         }
         
-        if (model instanceof MMDModelManager.ModelWithEntityData mwed) {
-            String displayName = maidName != null ? maidName : "女仆";
-            return new MaterialVisibilityScreen(mwed.model.GetModelLong(), displayName, model.getModelName());
-        }
-        
-        return null;
+        String displayName = maidName != null ? maidName : "女仆";
+        return new MaterialVisibilityScreen(model.model.getModelHandle(), displayName, model.getModelName());
     }
     
+    /**
+     * 加载材质列表
+     */
     private void loadMaterials() {
         materials.clear();
         NativeFunc nf = NativeFunc.GetInst();
@@ -133,6 +128,9 @@ public class MaterialVisibilityScreen extends Screen {
         logger.info("加载了 {} 个材质", materials.size());
     }
     
+    /**
+     * 更新统计数量
+     */
     private void updateCounts() {
         totalCount = materials.size();
         visibleCount = (int) materials.stream().filter(m -> m.visible).count();
@@ -142,6 +140,7 @@ public class MaterialVisibilityScreen extends Screen {
     protected void init() {
         super.init();
         
+        // 面板位置：屏幕右侧（与 ModelSelectorScreen 一致）
         panelX = this.width - PANEL_WIDTH - PANEL_MARGIN;
         panelY = PANEL_MARGIN;
         panelH = this.height - PANEL_MARGIN * 2;
@@ -149,28 +148,35 @@ public class MaterialVisibilityScreen extends Screen {
         listTop = panelY + HEADER_HEIGHT;
         listBottom = panelY + panelH - FOOTER_HEIGHT;
         
+        // 计算滚动
         int contentHeight = materials.size() * (ITEM_HEIGHT + ITEM_SPACING);
         int visibleHeight = listBottom - listTop;
         maxScroll = Math.max(0, contentHeight - visibleHeight);
         scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset));
         
-        // 底部按钮
-        int btnY = listBottom + 4;
+        // 按钮区域（面板底部，两行紧凑排列）
+        int btnRow1Y = listBottom + 4;
+        int btnRow2Y = btnRow1Y + 16;
         int btnW = (PANEL_WIDTH - 16) / 3;
         
+        // 第一行：全显 / 全隐 / 反选
         this.addRenderableWidget(Button.builder(Component.literal("全显"), btn -> setAllVisible(true))
-            .bounds(panelX + 4, btnY, btnW, 14).build());
+            .bounds(panelX + 4, btnRow1Y, btnW, 14).build());
         
         this.addRenderableWidget(Button.builder(Component.literal("全隐"), btn -> setAllVisible(false))
-            .bounds(panelX + 6 + btnW, btnY, btnW, 14).build());
+            .bounds(panelX + 4 + btnW + 4, btnRow1Y, btnW, 14).build());
         
         this.addRenderableWidget(Button.builder(Component.literal("反选"), btn -> invertSelection())
-            .bounds(panelX + 8 + btnW * 2, btnY, btnW, 14).build());
+            .bounds(panelX + 4 + (btnW + 4) * 2, btnRow1Y, btnW, 14).build());
         
-        this.addRenderableWidget(Button.builder(Component.literal("完成"), btn -> this.onClose())
-            .bounds(panelX + 4, btnY + 18, PANEL_WIDTH - 8, 14).build());
+        // 第二行：完成
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), btn -> this.onClose())
+            .bounds(panelX + 4, btnRow2Y, PANEL_WIDTH - 8, 14).build());
     }
     
+    /**
+     * 设置所有材质可见性
+     */
     private void setAllVisible(boolean visible) {
         NativeFunc nf = NativeFunc.GetInst();
         nf.SetAllMaterialsVisible(modelHandle, visible);
@@ -180,6 +186,9 @@ public class MaterialVisibilityScreen extends Screen {
         updateCounts();
     }
     
+    /**
+     * 反选所有材质
+     */
     private void invertSelection() {
         NativeFunc nf = NativeFunc.GetInst();
         for (MaterialEntry entry : materials) {
@@ -189,6 +198,9 @@ public class MaterialVisibilityScreen extends Screen {
         updateCounts();
     }
     
+    /**
+     * 切换单个材质可见性
+     */
     private void toggleMaterial(int index) {
         if (index < 0 || index >= materials.size()) return;
         
@@ -201,41 +213,19 @@ public class MaterialVisibilityScreen extends Screen {
     }
     
     @Override
-    public void onClose() {
-        // 保存材质可见性到模型配置
-        saveMaterialVisibility();
-        super.onClose();
-    }
-
-    private void saveMaterialVisibility() {
-        try {
-            ModelConfigData config = ModelConfigManager.getConfig(configModelName);
-            config.hiddenMaterials.clear();
-            for (MaterialEntry entry : materials) {
-                if (!entry.visible) {
-                    config.hiddenMaterials.add(entry.index);
-                }
-            }
-            ModelConfigManager.saveConfig(configModelName, config);
-            logger.info("已保存材质可见性配置: {}", configModelName);
-        } catch (Exception e) {
-            logger.warn("保存材质可见性配置失败: {}", configModelName, e);
-        }
-    }
-
-    @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        // 不渲染全屏背景，保持左侧透明用于模型预览
+        
         // 右侧面板背景
         guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelH, COLOR_PANEL_BG);
+        // 面板左边框
         guiGraphics.fill(panelX, panelY, panelX + 1, panelY + panelH, COLOR_PANEL_BORDER);
         
         // 头部
         renderHeader(guiGraphics);
         
-        // 材质列表（裁剪区域）
-        guiGraphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
+        // 材质列表
         renderMaterialList(guiGraphics, mouseX, mouseY);
-        guiGraphics.disableScissor();
         
         // 滚动条
         renderScrollbar(guiGraphics);
@@ -246,17 +236,29 @@ public class MaterialVisibilityScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
     
+    /**
+     * 渲染头部
+     */
     private void renderHeader(GuiGraphics guiGraphics) {
         int cx = panelX + PANEL_WIDTH / 2;
+        
+        // 标题
         guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);
         
+        // 模型名称
         String info = truncate(modelName, 18);
         guiGraphics.drawCenteredString(this.font, info, cx, panelY + 16, COLOR_TEXT_DIM);
         
+        // 分隔线
         guiGraphics.fill(panelX + 8, listTop - 2, panelX + PANEL_WIDTH - 8, listTop - 1, COLOR_SEPARATOR);
     }
     
+    /**
+     * 渲染材质列表
+     */
     private void renderMaterialList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        guiGraphics.enableScissor(panelX, listTop, panelX + PANEL_WIDTH, listBottom);
+        
         hoveredIndex = -1;
         
         for (int i = 0; i < materials.size(); i++) {
@@ -265,17 +267,24 @@ public class MaterialVisibilityScreen extends Screen {
             
             if (itemY + ITEM_HEIGHT < listTop || itemY > listBottom) continue;
             
-            boolean isHovered = mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH
+            int itemX = panelX + 6;
+            int itemW = PANEL_WIDTH - 12;
+            boolean isHovered = mouseX >= itemX && mouseX <= itemX + itemW
                              && mouseY >= Math.max(itemY, listTop) 
                              && mouseY <= Math.min(itemY + ITEM_HEIGHT, listBottom);
             
             if (isHovered) hoveredIndex = i;
             
-            renderMaterialItem(guiGraphics, entry, panelX, itemY, PANEL_WIDTH, isHovered);
+            renderMaterialItem(guiGraphics, entry, itemX, itemY, itemW, isHovered);
         }
+        
+        guiGraphics.disableScissor();
     }
     
-    private void renderMaterialItem(GuiGraphics guiGraphics, MaterialEntry entry,
+    /**
+     * 渲染单个材质条目 — 简约风格
+     */
+    private void renderMaterialItem(GuiGraphics guiGraphics, MaterialEntry entry, 
                                      int x, int y, int w, boolean isHovered) {
         // 悬停背景
         if (isHovered) {
@@ -298,6 +307,9 @@ public class MaterialVisibilityScreen extends Screen {
         guiGraphics.drawString(this.font, tag, x + w - tagW - 4, y + 3, tagColor);
     }
     
+    /**
+     * 渲染滚动条
+     */
     private void renderScrollbar(GuiGraphics guiGraphics) {
         if (maxScroll <= 0) return;
         
@@ -313,7 +325,11 @@ public class MaterialVisibilityScreen extends Screen {
         guiGraphics.fill(barX, thumbY, barX + 2, thumbY + thumbH, COLOR_ACCENT);
     }
     
+    /**
+     * 渲染底部统计
+     */
     private void renderFooterStats(GuiGraphics guiGraphics) {
+        // 统计信息放在面板最底部（按钮下方）
         int cx = panelX + PANEL_WIDTH / 2;
         int statsY = panelY + panelH - 10;
         String stats = visibleCount + " / " + totalCount;
@@ -330,13 +346,41 @@ public class MaterialVisibilityScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // 仅面板区域响应滚动
         if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(scrollY * 24)));
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(delta * 24)));
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+    
+    @Override
+    public void onClose() {
+        saveMaterialVisibility();
+        super.onClose();
+    }
+    
+    /**
+     * 保存当前材质可见性状态到模型配置
+     */
+    private void saveMaterialVisibility() {
+        if (configModelName == null || configModelName.isEmpty()) return;
+        
+        try {
+            ModelConfigData config = ModelConfigManager.getConfig(configModelName);
+            Set<Integer> hidden = new HashSet<>();
+            for (MaterialEntry entry : materials) {
+                if (!entry.visible) {
+                    hidden.add(entry.index);
+                }
+            }
+            config.hiddenMaterials = hidden;
+            ModelConfigManager.saveConfig(configModelName, config);
+            logger.debug("材质可见性已保存: {} (隐藏 {})", configModelName, hidden.size());
+        } catch (Exception e) {
+            logger.warn("保存材质可见性失败: {}", configModelName, e);
+        }
     }
     
     @Override
@@ -348,10 +392,6 @@ public class MaterialVisibilityScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
     
-    @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-    }
-
     @Override
     public boolean isPauseScreen() {
         return false;

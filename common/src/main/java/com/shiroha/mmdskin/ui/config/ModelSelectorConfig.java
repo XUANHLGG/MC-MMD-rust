@@ -1,11 +1,10 @@
 package com.shiroha.mmdskin.ui.config;
 
-import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.config.UIConstants;
+import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

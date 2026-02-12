@@ -115,6 +115,7 @@ public class MaidModelSelectorScreen extends Screen {
         scrollOffset = 0;
         this.clearWidgets();
         this.init();
+        logger.info("女仆模型列表已刷新");
     }
 
     private void selectModel(ModelCardEntry card) {
@@ -246,13 +247,13 @@ public class MaidModelSelectorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // 仅面板区域响应滚动
         if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(scrollY * 24)));
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(delta * 24)));
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override
@@ -262,10 +263,6 @@ public class MaidModelSelectorScreen extends Screen {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override

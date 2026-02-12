@@ -8,9 +8,9 @@ import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.PauseScreen;
-import net.minecraft.network.chat.Component;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import net.minecraft.network.chat.Component;
 import org.joml.Vector3f;
 
 /**
@@ -67,7 +67,7 @@ public class MMDCameraController {
     private long modelHandle = 0;
     
     // 音频播放器
-    private final StageAudioPlayer audioPlayer = StageAudioPlayer.getInstance();
+    private final StageAudioPlayer audioPlayer = new StageAudioPlayer();
     
     // 相机数据
     private final MMDCameraData cameraData = new MMDCameraData();
@@ -113,13 +113,6 @@ public class MMDCameraController {
     
     public static MMDCameraController getInstance() {
         return INSTANCE;
-    }
-
-    /**
-     * 判断是否处于舞台模式（供 Mixin 调用）
-     */
-    public boolean isInStageMode() {
-        return this.state != StageState.INACTIVE;
     }
     
     // ==================== 生命周期方法 ====================
@@ -662,11 +655,11 @@ public class MMDCameraController {
     public boolean isStagePlayingModel(long handle) {
         return state == StageState.PLAYING && modelHandle != 0 && modelHandle == handle;
     }
-
+    
     public float getAnchorYaw() {
         return anchorYaw;
     }
-
+    
     public boolean isCinematicMode() {
         return cinematicMode;
     }

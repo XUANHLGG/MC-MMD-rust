@@ -1,7 +1,6 @@
 package com.shiroha.mmdskin.renderer.camera;
 
 import javazoom.jl.decoder.*;
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,11 +13,16 @@ import org.lwjgl.system.MemoryUtil;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
+import net.minecraft.client.Minecraft;
+
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.nio.file.Files;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 舞台模式音频播放器
@@ -30,15 +34,16 @@ import java.nio.file.Files;
  * - 通过独立 OpenAL Source 播放，不干扰 MC 自身的音频系统
  */
 public class StageAudioPlayer {
-    /**
-     * 已存在的实例管理（针对本地玩家或远程玩家）
-     */
-    private static final java.util.Map<java.util.UUID, StageAudioPlayer> REMOTE_PLAYERS = new java.util.concurrent.ConcurrentHashMap<>();
+    /** 远程玩家音频播放器实例 */
+    private static final ConcurrentHashMap<UUID, StageAudioPlayer> REMOTE_PLAYERS = new ConcurrentHashMap<>();
     private static StageAudioPlayer instance = null;
 
-    /**
-     * 获取单例（用于本地玩家）
-     */
+    // 距离衰减参数
+    private static final float REF_DISTANCE = 16.0f;   // 此距离内满音量
+    private static final float MAX_DISTANCE = 96.0f;    // 此距离外静音
+    private static int attenuationTickCounter = 0;
+
+    /** 获取单例（用于本地玩家） */
     public static StageAudioPlayer getInstance() {
         if (instance == null) {
             instance = new StageAudioPlayer();
@@ -46,31 +51,24 @@ public class StageAudioPlayer {
         return instance;
     }
 
-    /**
-     * 播放远程玩家的音频
-     */
+    /** 播放远程玩家的音频 */
     public static void playRemoteAudio(Player player, String filePath) {
         if (player == null || filePath == null) return;
-        
         StageAudioPlayer sap = REMOTE_PLAYERS.computeIfAbsent(player.getUUID(), k -> new StageAudioPlayer());
         if (sap.load(filePath)) {
             sap.play();
         }
     }
 
-    /**
-     * 停止并移除远程玩家的音频播放器
-     */
-    public static void stopRemoteAudio(java.util.UUID uuid) {
+    /** 停止并移除远程玩家的音频播放器 */
+    public static void stopRemoteAudio(UUID uuid) {
         StageAudioPlayer sap = REMOTE_PLAYERS.remove(uuid);
         if (sap != null) {
             sap.cleanup();
         }
     }
 
-    /**
-     * 清理所有远程玩家的音频
-     */
+    /** 清理所有远程玩家的音频 */
     public static void cleanupAll() {
         REMOTE_PLAYERS.values().forEach(StageAudioPlayer::cleanup);
         REMOTE_PLAYERS.clear();
@@ -80,27 +78,45 @@ public class StageAudioPlayer {
     }
 
     /**
-     * 更新远程玩家的音量衰减
-     * 16格内满音量，96格外静音
+     * 每 tick 调用，每 20 tick（约1秒）更新一次远程音频的距离衰减。
+     * 保持 2D 播放模式，仅通过 AL_GAIN 模拟距离衰减，零空间音频开销。
+     * 播放结束的实例会被自动清理。
      */
-    public static void updateRemoteVolume(Player player) {
-        if (player == null) return;
-        StageAudioPlayer sap = REMOTE_PLAYERS.get(player.getUUID());
-        if (sap != null && sap.isLoaded()) {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null) {
-                double dist = player.distanceTo(mc.player);
-                float vol = 1.0f;
-                if (dist <= 16.0) {
-                    vol = 1.0f;
-                } else if (dist >= 96.0) {
-                    vol = 0.0f;
-                } else {
-                    // 16-96 线性衰减
-                    vol = 1.0f - (float) ((dist - 16.0) / (96.0 - 16.0));
-                }
-                sap.setVolume(vol);
+    public static void tickRemoteAttenuation() {
+        if (REMOTE_PLAYERS.isEmpty()) return;
+        attenuationTickCounter++;
+        if (attenuationTickCounter < 20) return;
+        attenuationTickCounter = 0;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+
+        var it = REMOTE_PLAYERS.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, StageAudioPlayer> entry = it.next();
+            StageAudioPlayer sap = entry.getValue();
+            // 播放结束的自动清理
+            if (!sap.isPlaying() && sap.initialized) {
+                sap.cleanup();
+                it.remove();
+                continue;
             }
+            Player remote = mc.level.getPlayerByUUID(entry.getKey());
+            if (remote == null) {
+                // 玩家离开视野或退出，静音但保留（等断线时统一清理）
+                sap.setGain(0.0f);
+                continue;
+            }
+            float dist = mc.player.distanceTo(remote);
+            float gain;
+            if (dist <= REF_DISTANCE) {
+                gain = 1.0f;
+            } else if (dist >= MAX_DISTANCE) {
+                gain = 0.0f;
+            } else {
+                gain = 1.0f - (dist - REF_DISTANCE) / (MAX_DISTANCE - REF_DISTANCE);
+            }
+            sap.setGain(gain * sap.volume);
         }
     }
 
@@ -135,15 +151,11 @@ public class StageAudioPlayer {
         
         // 路径安全校验，防止路径遍历漏洞
         try {
-            String canonicalPath = file.getCanonicalPath();
-            String absolutePath = file.getAbsolutePath();
-            // 如果规范路径与绝对路径不符，或者包含 ..，则可能存在遍历攻击
-            // 这里我们主要检查文件是否存在以及是否能被读取
             if (!file.exists() || !file.isFile()) {
                 logger.warn("[StageAudio] 文件不存在或不是文件: {}", filePath);
                 return false;
             }
-        } catch (IOException e) {
+        } catch (SecurityException e) {
             logger.error("[StageAudio] 路径校验失败: {} - {}", filePath, e.getMessage());
             return false;
         }
@@ -316,6 +328,15 @@ public class StageAudioPlayer {
         return audioPath;
     }
     
+    /**
+     * 设置 OpenAL Source 的实际增益（由距离衰减调用）
+     */
+    private void setGain(float gain) {
+        if (initialized && alSource != 0) {
+            AL10.alSourcef(alSource, AL10.AL_GAIN, Math.max(0.0f, Math.min(1.0f, gain)));
+        }
+    }
+
     /**
      * 释放所有 OpenAL 资源
      */
