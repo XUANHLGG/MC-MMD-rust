@@ -52,8 +52,8 @@ public class ConfigData {
     public float physicsFps = 60.0f;
     public int physicsMaxSubstepCount = 5;
     public float physicsInertiaStrength = 0.5f;
-    public float physicsMaxLinearVelocity = 5.0f;
-    public float physicsMaxAngularVelocity = 5.0f;
+    public float physicsMaxLinearVelocity = 20.0f;
+    public float physicsMaxAngularVelocity = 20.0f;
     public boolean physicsJointsEnabled = true;
     public boolean physicsDebugLog = false;
     

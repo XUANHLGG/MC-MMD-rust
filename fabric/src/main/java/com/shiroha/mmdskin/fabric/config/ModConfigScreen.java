@@ -308,7 +308,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_max_linear_velocity"),
                 (int)data.physicsMaxLinearVelocity, 0, 100)
-            .setDefaultValue(5)
+            .setDefaultValue(20)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_max_linear_velocity.tooltip"))
             .setSaveConsumer(value -> data.physicsMaxLinearVelocity = value)
             .build());
@@ -318,7 +318,7 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_max_angular_velocity"),
                 (int)data.physicsMaxAngularVelocity, 0, 100)
-            .setDefaultValue(5)
+            .setDefaultValue(20)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_max_angular_velocity.tooltip"))
             .setSaveConsumer(value -> data.physicsMaxAngularVelocity = value)
             .build());

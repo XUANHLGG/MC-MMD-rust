@@ -163,11 +163,11 @@ public class ConfigManager {
     }
     
     public static float getPhysicsMaxLinearVelocity() {
-        return provider != null ? provider.getPhysicsMaxLinearVelocity() : 5.0f;
+        return provider != null ? provider.getPhysicsMaxLinearVelocity() : 20.0f;
     }
     
     public static float getPhysicsMaxAngularVelocity() {
-        return provider != null ? provider.getPhysicsMaxAngularVelocity() : 5.0f;
+        return provider != null ? provider.getPhysicsMaxAngularVelocity() : 20.0f;
     }
     
     public static boolean isPhysicsJointsEnabled() {

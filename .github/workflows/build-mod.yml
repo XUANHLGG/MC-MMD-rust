@@ -432,8 +432,6 @@ jobs:
           files: |
             artifacts/mmdskin-fabric-*/*.jar
             artifacts/mmdskin-forge-*/*.jar
-            artifacts/mmdskin-fabric-*-universal/*.jar
-            artifacts/mmdskin-forge-*-universal/*.jar
             artifacts/native-windows-x64/*.dll
             artifacts/native-windows-arm64/*.dll
             artifacts/native-linux-x64/*.so
