@@ -75,7 +75,7 @@ public final class NativeLibraryLoader {
 
     // ==================== 版本与下载 ====================
 
-    static final String LIBRARY_VERSION = "v1.0.2";
+    static final String LIBRARY_VERSION = "v1.0.3";
     private static final String RELEASE_BASE_URL =
             "https://github.com/shiroha-23/MC-MMD-rust/releases/download/" + LIBRARY_VERSION + "/";
 
@@ -302,7 +302,7 @@ public final class NativeLibraryLoader {
 
     /**
      * 版本化文件名，避免文件替换冲突。
-     * 例如: mmd_engine.dll → mmd_engine_v1.0.2.dll
+     * 例如: mmd_engine.dll → mmd_engine_v1.0.3.dll
      */
     private static String getVersionedFileName(String baseFileName) {
         int dotIndex = baseFileName.lastIndexOf('.');
