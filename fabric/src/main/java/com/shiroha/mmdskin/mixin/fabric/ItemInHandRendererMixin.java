@@ -1,6 +1,7 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.fabric.YsmCompat;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.player.LocalPlayer;
@@ -46,8 +47,8 @@ public abstract class ItemInHandRendererMixin {
         }
 
         // 如果没有 YSM 接管，则由 MMD 决定：
-        // 只有在选了非原版 MMD 模型时，才取消原版手臂渲染。
-        if (isMmdActive && !isVanilaMmdModel) {
+        // 只有在选了非原版 MMD 模型且启用了第一人称模型时，才取消原版手臂渲染。
+        if (isMmdActive && !isVanilaMmdModel && ConfigManager.isFirstPersonModelEnabled()) {
             ci.cancel();
         }
     }

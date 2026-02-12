@@ -20,8 +20,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
+import com.mojang.blaze3d.platform.GlStateManager;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
 import net.minecraft.util.Mth;
@@ -52,6 +56,7 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
         super(ctx, model, shadowRadius);
     }
 
+    @SuppressWarnings("deprecation")
     @Inject(method = "render(Lnet/minecraft/client/player/AbstractClientPlayer;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"), cancellable = true)
     public void onRender(AbstractClientPlayer player, float entityYaw, float tickDelta, PoseStack matrixStack, 
                       MultiBufferSource vertexConsumers, int packedLight, CallbackInfo ci) {
@@ -101,6 +106,9 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
             return;
         }
         
+        // 确保在渲染前清除 OpenGL 错误状态
+        GlStateManager._getError();
+        
         IMMDModel model = modelData.model;
         
         // 加载模型属性
@@ -114,39 +122,62 @@ public abstract class FabricPlayerRendererMixin extends LivingEntityRenderer<Abs
         FirstPersonManager.preRender(NativeFunc.GetInst(), model.getModelHandle(), combinedScale, isLocalPlayer);
         boolean isFirstPerson = isLocalPlayer && FirstPersonManager.isActive();
 
-        // 更新动画状态（委托给 AnimationStateManager）
-        AnimationStateManager.updateAnimationState(player, modelData);
-        
-        // 计算渲染参数
-        RenderParams params = calculateRenderParams(player, modelData, tickDelta);
-        
-        // pushPose 隔离缩放，防止泄漏到 EntityRenderDispatcher 的 renderHitbox()
-        matrixStack.pushPose();
-
-        // 渲染模型
-        if (InventoryRenderHelper.isInventoryScreen()) {
-            // 库存屏幕渲染
-            InventoryRenderHelper.renderInInventory(player, model, entityYaw, tickDelta, matrixStack, packedLight, size);
+        if (isFirstPerson && player.isSwimming()) {
+            ci.cancel();
         } else {
-            // 正常世界渲染
-            matrixStack.scale(size[0], size[0], size[0]);
-            RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
-            RenderContext ctx = isFirstPerson ? RenderContext.FIRST_PERSON : RenderContext.WORLD;
-            model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, packedLight, ctx);
+            // 更新动画状态（委托给 AnimationStateManager）
+            AnimationStateManager.updateAnimationState(player, modelData);
+            
+            // 计算渲染参数
+            RenderParams params = calculateRenderParams(player, modelData, tickDelta);
+            
+            int finalLight = packedLight;
+            if (modelData.entityData.playStageAnim || MMDCameraController.getInstance().isActive()) {
+                finalLight = LightTexture.pack(15, 15);
+            }
+
+            // pushPose 隔离缩放，防止泄漏到 EntityRenderDispatcher 的 renderHitbox()
+            matrixStack.pushPose();
+
+            // 渲染模型
+            if (InventoryRenderHelper.isInventoryScreen()) {
+                // 库存屏幕渲染
+                InventoryRenderHelper.renderInInventory(player, model, entityYaw, tickDelta, matrixStack, finalLight, size);
+            } else {
+                // 正常世界渲染
+                matrixStack.scale(size[0], size[0], size[0]);
+                RenderSystem.disableBlend();
+                RenderSystem.enableDepthTest();
+                RenderSystem.depthMask(true);
+                RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+                RenderSystem.enableCull();
+                RenderSystem.setShaderTexture(0, TextureAtlas.LOCATION_BLOCKS);
+                if (GameRenderer.getRendertypeEntityTranslucentShader() != null) {
+                    RenderSystem.setShader(GameRenderer::getRendertypeEntityTranslucentShader);
+                } else {
+                    RenderSystem.setShader(GameRenderer::getPositionColorShader);
+                }
+
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.disableCull();
+                RenderContext ctx = isFirstPerson ? RenderContext.FIRST_PERSON : RenderContext.WORLD;
+                model.render(player, params.bodyYaw, params.bodyPitch, params.translation, tickDelta, matrixStack, finalLight, ctx);
+            }
+
+            // 第一人称模式（阶段二：render 之后获取当前帧的眼睛骨骼位置）
+            if (isFirstPerson) {
+                FirstPersonManager.postRender(NativeFunc.GetInst(), model.getModelHandle());
+            }
+
+            // 渲染手持物品（委托给 ItemRenderHelper）
+            ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
+            
+            matrixStack.popPose();
+
+            // 取消原版渲染
+            ci.cancel();
         }
-
-        // 第一人称模式（阶段二：render 之后获取当前帧的眼睛骨骼位置）
-        if (isFirstPerson) {
-            FirstPersonManager.postRender(NativeFunc.GetInst(), model.getModelHandle());
-        }
-
-        // 渲染手持物品（委托给 ItemRenderHelper）
-        ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
-        
-        matrixStack.popPose();
-
-        // 取消原版渲染
-        ci.cancel();
     }
     
     /**

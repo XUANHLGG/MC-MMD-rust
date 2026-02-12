@@ -9,6 +9,7 @@ import com.shiroha.mmdskin.renderer.core.EntityAnimState;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.core.IrisCompat;
 import com.shiroha.mmdskin.renderer.core.ModelCache;
+import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
 import com.shiroha.mmdskin.renderer.core.RenderModeManager;
 import com.shiroha.mmdskin.renderer.model.factory.ModelFactoryRegistry;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
@@ -387,6 +388,8 @@ public class MMDModelManager {
      * 适用于渲染模式切换（CPU/GPU）时需要完全重建所有模型的场景
      */
     public static void forceReloadAllModels() {
+        // 重置第一人称状态（旧模型句柄即将失效）
+        FirstPersonManager.reset();
         // 取消所有正在进行的后台加载
         cancelAllPendingLoads();
         modelCache.clear(MMDModelManager::disposeModel);
@@ -480,6 +483,7 @@ public class MMDModelManager {
     }
     
     public static void ReloadModel() {
+        FirstPersonManager.reset();
         cancelAllPendingLoads();
         modelCache.clear(MMDModelManager::disposeModel);
         MaidMMDModelManager.invalidateLoadedModels();

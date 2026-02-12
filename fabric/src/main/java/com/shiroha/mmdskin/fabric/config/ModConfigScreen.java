@@ -20,6 +20,9 @@ public class ModConfigScreen {
     public static Screen create(Screen parent) {
         ConfigData data = MmdSkinConfig.getData();
         
+        // 记录保存前的渲染模式状态，仅在实际变化时才重载模型
+        final boolean oldGpuSkinning = data.gpuSkinningEnabled;
+        
         ConfigBuilder builder = ConfigBuilder.create()
             .setParentScreen(parent)
             .setTitle(Component.translatable("gui.mmdskin.mod_settings.title"));
@@ -148,6 +151,7 @@ public class ModConfigScreen {
                 (int)(data.toonRimPower * 10), 10, 100)
             .setDefaultValue(30)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_rim_power.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.1f", value / 10.0f)))
             .setSaveConsumer(value -> data.toonRimPower = value / 10.0f)
             .build());
         
@@ -157,6 +161,7 @@ public class ModConfigScreen {
                 (int)(data.toonRimIntensity * 100), 0, 100)
             .setDefaultValue(30)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_rim_intensity.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonRimIntensity = value / 100.0f)
             .build());
         
@@ -167,6 +172,7 @@ public class ModConfigScreen {
                 (int)(data.toonShadowR * 100), 0, 100)
             .setDefaultValue(60)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_shadow.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonShadowR = value / 100.0f)
             .build());
         
@@ -175,6 +181,7 @@ public class ModConfigScreen {
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_g"),
                 (int)(data.toonShadowG * 100), 0, 100)
             .setDefaultValue(50)
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonShadowG = value / 100.0f)
             .build());
         
@@ -183,6 +190,7 @@ public class ModConfigScreen {
                 Component.translatable("gui.mmdskin.mod_settings.toon_shadow_b"),
                 (int)(data.toonShadowB * 100), 0, 100)
             .setDefaultValue(70)
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonShadowB = value / 100.0f)
             .build());
         
@@ -202,6 +210,7 @@ public class ModConfigScreen {
                 (int)(data.toonSpecularIntensity * 100), 0, 100)
             .setDefaultValue(50)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_specular_intensity.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonSpecularIntensity = value / 100.0f)
             .build());
         
@@ -221,6 +230,7 @@ public class ModConfigScreen {
                 (int)(data.toonOutlineWidth * 1000), 1, 100)
             .setDefaultValue(20)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline_width.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.3f", value / 1000.0f)))
             .setSaveConsumer(value -> data.toonOutlineWidth = value / 1000.0f)
             .build());
         
@@ -230,6 +240,7 @@ public class ModConfigScreen {
                 (int)(data.toonOutlineR * 100), 0, 100)
             .setDefaultValue(10)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.toon_outline_color.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonOutlineR = value / 100.0f)
             .build());
         
@@ -238,6 +249,7 @@ public class ModConfigScreen {
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_g"),
                 (int)(data.toonOutlineG * 100), 0, 100)
             .setDefaultValue(10)
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonOutlineG = value / 100.0f)
             .build());
         
@@ -246,6 +258,7 @@ public class ModConfigScreen {
                 Component.translatable("gui.mmdskin.mod_settings.toon_outline_b"),
                 (int)(data.toonOutlineB * 100), 0, 100)
             .setDefaultValue(10)
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.toonOutlineB = value / 100.0f)
             .build());
         
@@ -270,6 +283,7 @@ public class ModConfigScreen {
                 (int)(data.physicsGravityY * -10), 1, 2000)
             .setDefaultValue(980)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_gravity.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.1f", value / -10.0f)))
             .setSaveConsumer(value -> data.physicsGravityY = value / -10.0f)
             .build());
         
@@ -300,6 +314,7 @@ public class ModConfigScreen {
                 (int)(data.physicsInertiaStrength * 100), 0, 300)
             .setDefaultValue(50)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_inertia.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.2f", value / 100.0f)))
             .setSaveConsumer(value -> data.physicsInertiaStrength = value / 100.0f)
             .build());
         
@@ -308,8 +323,9 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_max_linear_velocity"),
                 (int)(data.physicsMaxLinearVelocity * 10), 1, 1000)
-            .setDefaultValue(50)
+            .setDefaultValue(200)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_max_linear_velocity.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.1f", value / 10.0f)))
             .setSaveConsumer(value -> data.physicsMaxLinearVelocity = value / 10.0f)
             .build());
         
@@ -318,8 +334,9 @@ public class ModConfigScreen {
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.physics_max_angular_velocity"),
                 (int)(data.physicsMaxAngularVelocity * 10), 1, 1000)
-            .setDefaultValue(50)
+            .setDefaultValue(200)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_max_angular_velocity.tooltip"))
+            .setTextGetter(value -> Component.literal(String.format("%.1f", value / 10.0f)))
             .setSaveConsumer(value -> data.physicsMaxAngularVelocity = value / 10.0f)
             .build());
         
@@ -347,8 +364,10 @@ public class ModConfigScreen {
             MmdSkinConfig.save();
             // 同步渲染模式设置到工厂
             com.shiroha.mmdskin.renderer.core.RenderModeManager.setUseGpuSkinning(data.gpuSkinningEnabled);
-            // 重载所有模型以应用新的渲染模式（CPU/GPU 蒙皮热切换）
-            com.shiroha.mmdskin.renderer.model.MMDModelManager.forceReloadAllModels();
+            // 仅在 GPU 蒙皮开关实际变化时才重载模型（避免切换第一人称等配置时不必要的重建）
+            if (oldGpuSkinning != data.gpuSkinningEnabled) {
+                com.shiroha.mmdskin.renderer.model.MMDModelManager.forceReloadAllModels();
+            }
             // 同步物理配置到 Rust 引擎
             try {
                 com.shiroha.mmdskin.NativeFunc.GetInst().SetPhysicsConfig(

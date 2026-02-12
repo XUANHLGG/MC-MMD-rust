@@ -1,9 +1,7 @@
 package com.shiroha.mmdskin.mixin.fabric;
 
-import com.shiroha.mmdskin.config.ConfigData;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.fabric.YsmCompat;
-import com.shiroha.mmdskin.fabric.config.MmdSkinConfig;
 import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
 import net.minecraft.client.Camera;

@@ -84,8 +84,6 @@ public class MMDModelOpenGL extends AbstractMMDModel {
     private int cachedShaderProgram = -1;
     // 性能优化：标记是否有 UV Morph，无则跳过每帧 UV 重传
     private boolean hasUvMorph = false;
-    // 性能优化：标记 VBO 是否已预分配，用于 glBufferSubData
-    private boolean vboPreallocated = false;
 
     MMDModelOpenGL() {
     }
@@ -284,7 +282,6 @@ public class MMDModelOpenGL extends AbstractMMDModel {
             result.indexType = indexType;
             result.mats = mats;
             result.lightMapMaterial = lightMapMaterial;
-            result.vboPreallocated = true;
             result.hasUvMorph = nf.GetUvMorphCount(model) > 0;
             
             // 预分配矩阵缓冲区（避免每帧分配）

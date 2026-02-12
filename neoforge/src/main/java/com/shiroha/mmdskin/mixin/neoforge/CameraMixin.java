@@ -1,9 +1,7 @@
 package com.shiroha.mmdskin.mixin.neoforge;
 
-import com.shiroha.mmdskin.config.ConfigData;
 import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.neoforge.YsmCompat;
-import com.shiroha.mmdskin.neoforge.config.MmdSkinConfig;
 import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.core.FirstPersonManager;
 import net.minecraft.client.Camera;

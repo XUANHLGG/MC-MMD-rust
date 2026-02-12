@@ -397,7 +397,6 @@ public class StageSelectScreen extends Screen {
         int sliderY = footerY + 18;
         int sliderX = panelX + 8;
         int sliderW = PANEL_WIDTH - 16;
-        int sliderH = 10;
         
         // 滑块标签 + 数值
         String heightLabel = String.format("H: %+.2f", cameraHeightOffset);

@@ -23,11 +23,11 @@ public interface IPhysicsConfig {
     /** 惯性效果强度（0.0=无惯性, 1.0=正常），默认 1.0 */
     default float getPhysicsInertiaStrength() { return 0.5f; }
 
-    /** 最大线速度（防止物理爆炸），默认 5.0 */
-    default float getPhysicsMaxLinearVelocity() { return 5.0f; }
+    /** 最大线速度（防止物理爆炸），默认 20.0 */
+    default float getPhysicsMaxLinearVelocity() { return 20.0f; }
 
-    /** 最大角速度（防止物理爆炸），默认 5.0 */
-    default float getPhysicsMaxAngularVelocity() { return 5.0f; }
+    /** 最大角速度（防止物理爆炸），默认 20.0 */
+    default float getPhysicsMaxAngularVelocity() { return 20.0f; }
 
     /** 是否启用关节（默认 true） */
     default boolean isPhysicsJointsEnabled() { return true; }

@@ -4,7 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -358,7 +358,7 @@ public final class NativeLibraryLoader {
 
             HttpURLConnection conn = null;
             for (int i = 0; i < 5; i++) {
-                conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(60000);

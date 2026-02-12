@@ -11,7 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.zip.ZipEntry;
@@ -170,7 +170,7 @@ public class MmdSkinClient {
             skin3DFolder.mkdir();
             String gameDir = PathConstants.getGameDirectory();
             try{
-                FileUtils.copyURLToFile(new URL(PathConstants.RESOURCE_DOWNLOAD_URL), 
+                FileUtils.copyURLToFile(URI.create(PathConstants.RESOURCE_DOWNLOAD_URL).toURL(), 
                     new File(gameDir, PathConstants.RESOURCE_ZIP_NAME), 30000, 30000);
             }catch (IOException e){
                 logger.info("Download 3d-skin.zip failed!");

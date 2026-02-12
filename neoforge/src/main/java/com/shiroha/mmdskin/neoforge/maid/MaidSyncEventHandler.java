@@ -2,7 +2,6 @@ package com.shiroha.mmdskin.neoforge.maid;
 
 import com.shiroha.mmdskin.neoforge.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.neoforge.register.MmdSkinAttachments;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.neoforged.bus.api.SubscribeEvent;
