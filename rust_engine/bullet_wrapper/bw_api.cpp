@@ -305,6 +305,15 @@ void bw_rigid_body_get_linear_velocity(BW_RigidBody* rb, float* x, float* y, flo
     if (z) *z = v.z();
 }
 
+void bw_rigid_body_get_angular_velocity(BW_RigidBody* rb, float* x, float* y, float* z) {
+    if (!rb) return;
+    btRigidBody* body = (btRigidBody*)rb;
+    const btVector3& v = body->getAngularVelocity();
+    if (x) *x = v.x();
+    if (y) *y = v.y();
+    if (z) *z = v.z();
+}
+
 void bw_rigid_body_set_damping(BW_RigidBody* rb, float linear, float angular) {
     if (!rb) return;
     btRigidBody* body = (btRigidBody*)rb;
@@ -359,6 +368,12 @@ void bw_rigid_body_clear_forces(BW_RigidBody* rb) {
     if (!rb) return;
     btRigidBody* body = (btRigidBody*)rb;
     body->clearForces();
+}
+
+void bw_rigid_body_apply_central_force(BW_RigidBody* rb, float x, float y, float z) {
+    if (!rb) return;
+    btRigidBody* body = (btRigidBody*)rb;
+    body->applyCentralForce(btVector3(x, y, z));
 }
 
 /* ===== 6DOF 弹簧约束 ===== */

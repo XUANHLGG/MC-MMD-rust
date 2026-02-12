@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use glam::{Mat4, Vec3};
+use glam::{Mat3, Mat4, Vec3};
 
 use mmd::pmx::rigid_body::RigidBody as PmxRigidBody;
 use mmd::pmx::joint::Joint as PmxJoint;
@@ -38,6 +38,9 @@ pub struct MMDPhysics {
     dynamic_bone_indices: HashSet<usize>,
     /// 动态骨骼变换结果缓冲区（复用内存）
     dynamic_bone_buf: Vec<(usize, Mat4)>,
+
+    /// 上一帧模型世界位置（用于计算移动速度实现惯性）
+    prev_model_position: Option<Vec3>,
 }
 
 impl MMDPhysics {
@@ -58,6 +61,7 @@ impl MMDPhysics {
             max_substep_count: config.max_substep_count,
             dynamic_bone_indices: HashSet::new(),
             dynamic_bone_buf: Vec::new(),
+            prev_model_position: None,
         })
     }
 
@@ -197,20 +201,108 @@ impl MMDPhysics {
         }
     }
 
-    /// 同步运动学刚体，供 update_physics 调用
+    /// 同步运动学刚体并传递模型移动速度（实现惯性）
+    ///
+    /// 原理：物理在模型局部空间运行，角色世界移动对物理不可见。
+    /// 第一步：同步 FollowBone 刚体到骨骼位置。
+    /// 第二步：计算模型世界速度，转换到物理空间后取反，
+    ///        对动态刚体施加 F = m * (-v_local) / dt，
+    ///        产生与移动方向相反的惯性力（头发/裙子自然后拽）。
     pub fn sync_bodies_with_model_velocity(
         &mut self,
         bone_transforms: &[Mat4],
-        _delta_time: f32,
-        _model_transform: Mat4,
+        delta_time: f32,
+        model_transform: Mat4,
     ) {
+        let config = get_config();
+        let dt = delta_time.max(0.001);
+        let curr_pos = model_transform.w_axis.truncate();
+
+        // 计算模型世界速度
+        let model_velocity = if let Some(prev_pos) = self.prev_model_position {
+            (curr_pos - prev_pos) / dt
+        } else {
+            Vec3::ZERO
+        };
+        self.prev_model_position = Some(curr_pos);
+
+        // 第一步：同步运动学刚体位置
         self.sync_bodies(bone_transforms);
+
+        // 第二步：给动态刚体施加惯性力
+        if config.inertia_strength > 0.0 && model_velocity.length_squared() > 1e-8 {
+            // 防止传送导致的速度爆炸
+            let speed_sq = model_velocity.length_squared();
+            let max_speed = 500.0_f32;
+            let world_vel = if speed_sq > max_speed * max_speed {
+                model_velocity * (max_speed / speed_sq.sqrt())
+            } else {
+                model_velocity
+            };
+
+            // 世界速度 → 模型局部空间（R^T * v_world）
+            let rot_inv = Mat3::from_mat4(model_transform).transpose();
+            let local_vel = rot_inv * world_vel;
+
+            // 惯性速度（反方向 + 右手→左手 Z 取反）
+            // 反向(-x, -y, -z) + Z翻转(z→-z) = (-x, -y, z)
+            let inertia_vel = Vec3::new(
+                -local_vel.x * config.inertia_strength,
+                -local_vel.y * config.inertia_strength,
+                local_vel.z * config.inertia_strength,
+            );
+
+            // F = m * v / dt（力施加方式，不会跨帧累积）
+            for rb_data in &self.rigid_bodies {
+                if rb_data.physics_mode == PhysicsMode::FollowBone {
+                    continue;
+                }
+                if let Some(ref body) = rb_data.bullet_body {
+                    let mass = body.get_mass();
+                    if mass > 0.0 {
+                        let force = inertia_vel * mass / dt;
+                        body.apply_central_force(force.x, force.y, force.z);
+                    }
+                }
+            }
+        }
     }
 
-    /// 步进物理模拟（Bullet3 stepSimulation）
+    /// 步进物理模拟（Bullet3 stepSimulation）+ 速度钳制
+    ///
+    /// Bullet3 没有内置全局速度限制，需在每步后手动截断超速刚体，
+    /// 防止卡顿帧或极端力导致的物理爆炸。
     pub fn step_simulation(&self, delta_time: f32) {
         let fixed_dt = 1.0 / self.fps;
         self.world.step(delta_time, self.max_substep_count, fixed_dt);
+
+        // 速度钳制
+        let config = get_config();
+        let max_lin = config.max_linear_velocity;
+        let max_ang = config.max_angular_velocity;
+        let max_lin_sq = max_lin * max_lin;
+        let max_ang_sq = max_ang * max_ang;
+
+        for rb_data in &self.rigid_bodies {
+            if rb_data.physics_mode == PhysicsMode::FollowBone {
+                continue;
+            }
+            if let Some(ref body) = rb_data.bullet_body {
+                let lin_vel = body.get_linear_velocity();
+                let lin_sq = lin_vel.length_squared();
+                if lin_sq > max_lin_sq {
+                    let clamped = lin_vel * (max_lin / lin_sq.sqrt());
+                    body.set_linear_velocity(clamped.x, clamped.y, clamped.z);
+                }
+
+                let ang_vel = body.get_angular_velocity();
+                let ang_sq = ang_vel.length_squared();
+                if ang_sq > max_ang_sq {
+                    let clamped = ang_vel * (max_ang / ang_sq.sqrt());
+                    body.set_angular_velocity(clamped.x, clamped.y, clamped.z);
+                }
+            }
+        }
     }
 
     /// 将动态刚体变换同步回骨骼（babylon-mmd syncBones）
@@ -272,6 +364,7 @@ impl MMDPhysics {
 
     /// 重置物理系统
     pub fn reset(&mut self) {
+        self.prev_model_position = None;
         for rb_data in &self.rigid_bodies {
             if let Some(ref body) = rb_data.bullet_body {
                 body.set_transform(rb_data.initial_transform);

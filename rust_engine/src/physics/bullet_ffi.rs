@@ -75,6 +75,7 @@ mod ffi {
         pub fn bw_rigid_body_set_linear_velocity(rb: *mut BW_RigidBody, x: c_float, y: c_float, z: c_float);
         pub fn bw_rigid_body_set_angular_velocity(rb: *mut BW_RigidBody, x: c_float, y: c_float, z: c_float);
         pub fn bw_rigid_body_get_linear_velocity(rb: *mut BW_RigidBody, x: *mut c_float, y: *mut c_float, z: *mut c_float);
+        pub fn bw_rigid_body_get_angular_velocity(rb: *mut BW_RigidBody, x: *mut c_float, y: *mut c_float, z: *mut c_float);
         pub fn bw_rigid_body_set_damping(rb: *mut BW_RigidBody, linear: c_float, angular: c_float);
         pub fn bw_rigid_body_set_friction(rb: *mut BW_RigidBody, friction: c_float);
         pub fn bw_rigid_body_set_restitution(rb: *mut BW_RigidBody, restitution: c_float);
@@ -83,6 +84,7 @@ mod ffi {
         pub fn bw_rigid_body_set_kinematic(rb: *mut BW_RigidBody, kinematic: bool);
         pub fn bw_rigid_body_get_mass(rb: *mut BW_RigidBody) -> c_float;
         pub fn bw_rigid_body_clear_forces(rb: *mut BW_RigidBody);
+        pub fn bw_rigid_body_apply_central_force(rb: *mut BW_RigidBody, x: c_float, y: c_float, z: c_float);
 
         // 6DOF 弹簧约束
         pub fn bw_6dof_spring_create(
@@ -291,6 +293,12 @@ impl BulletRigidBody {
         glam::Vec3::new(x, y, z)
     }
 
+    pub fn get_angular_velocity(&self) -> glam::Vec3 {
+        let (mut x, mut y, mut z) = (0.0f32, 0.0f32, 0.0f32);
+        unsafe { ffi::bw_rigid_body_get_angular_velocity(self.ptr, &mut x, &mut y, &mut z) }
+        glam::Vec3::new(x, y, z)
+    }
+
     pub fn set_damping(&self, linear: f32, angular: f32) {
         unsafe { ffi::bw_rigid_body_set_damping(self.ptr, linear, angular) }
     }
@@ -305,6 +313,10 @@ impl BulletRigidBody {
 
     pub fn clear_forces(&self) {
         unsafe { ffi::bw_rigid_body_clear_forces(self.ptr) }
+    }
+
+    pub fn apply_central_force(&self, x: f32, y: f32, z: f32) {
+        unsafe { ffi::bw_rigid_body_apply_central_force(self.ptr, x, y, z) }
     }
 
     pub fn force_activation_state(&self, state: i32) {

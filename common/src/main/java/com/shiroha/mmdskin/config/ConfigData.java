@@ -45,53 +45,14 @@ public class ConfigData {
     public float toonOutlineG = 0.0f;
     public float toonOutlineB = 0.0f;
     
-    // ==================== 物理引擎配置 ====================
-    // 重力
-    public float physicsGravityY = -3.8f;
-    
-    // 模拟参数
+    // ==================== 物理引擎配置（Bullet3） ====================
+    // 默认值与 Rust PhysicsConfig 保持一致
+    public float physicsGravityY = -98.0f;
     public float physicsFps = 60.0f;
-    public int physicsMaxSubstepCount = 4;
-    public int physicsSolverIterations = 4;
-    public int physicsPgsIterations = 2;
-    public float physicsMaxCorrectiveVelocity = 0.1f;
-    
-    // 刚体阻尼
-    public float physicsLinearDampingScale = 0.3f;
-    public float physicsAngularDampingScale = 0.2f;
-    
-    // 质量
-    public float physicsMassScale = 2.0f;
-    
-    // 弹簧刚度
-    public float physicsLinearSpringStiffnessScale = 0.01f;
-    public float physicsAngularSpringStiffnessScale = 0.01f;
-    
-    // 弹簧阻尼
-    public float physicsLinearSpringDampingFactor = 8.0f;
-    public float physicsAngularSpringDampingFactor = 8.0f;
-    
-    // 惯性效果
-    public float physicsInertiaStrength = 1.0f;
-    
-    // 速度限制
-    public float physicsMaxLinearVelocity = 1.0f;
-    public float physicsMaxAngularVelocity = 1.0f;
-    
-    // 胸部物理专用参数
-    public boolean physicsBustEnabled = true;
-    public float physicsBustLinearDampingScale = 1.5f;
-    public float physicsBustAngularDampingScale = 1.5f;
-    public float physicsBustMassScale = 1.0f;
-    public float physicsBustLinearSpringStiffnessScale = 10.0f;
-    public float physicsBustAngularSpringStiffnessScale = 10.0f;
-    public float physicsBustLinearSpringDampingFactor = 3.0f;
-    public float physicsBustAngularSpringDampingFactor = 3.0f;
-    
-    // 胸部防凹陷
-    public boolean physicsBustClampInward = true;
-    
-    // 调试
+    public int physicsMaxSubstepCount = 5;
+    public float physicsInertiaStrength = 0.5f;
+    public float physicsMaxLinearVelocity = 100.0f;
+    public float physicsMaxAngularVelocity = 100.0f;
     public boolean physicsJointsEnabled = true;
     public boolean physicsDebugLog = false;
     

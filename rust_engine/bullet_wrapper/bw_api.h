@@ -84,6 +84,7 @@ void bw_rigid_body_get_rotation(BW_RigidBody* rb, float* x, float* y, float* z, 
 void bw_rigid_body_set_linear_velocity(BW_RigidBody* rb, float x, float y, float z);
 void bw_rigid_body_set_angular_velocity(BW_RigidBody* rb, float x, float y, float z);
 void bw_rigid_body_get_linear_velocity(BW_RigidBody* rb, float* x, float* y, float* z);
+void bw_rigid_body_get_angular_velocity(BW_RigidBody* rb, float* x, float* y, float* z);
 void bw_rigid_body_set_damping(BW_RigidBody* rb, float linear, float angular);
 void bw_rigid_body_set_friction(BW_RigidBody* rb, float friction);
 void bw_rigid_body_set_restitution(BW_RigidBody* rb, float restitution);
@@ -92,6 +93,7 @@ void bw_rigid_body_force_activation_state(BW_RigidBody* rb, int state);
 void bw_rigid_body_set_kinematic(BW_RigidBody* rb, bool kinematic);
 float bw_rigid_body_get_mass(BW_RigidBody* rb);
 void bw_rigid_body_clear_forces(BW_RigidBody* rb);
+void bw_rigid_body_apply_central_force(BW_RigidBody* rb, float x, float y, float z);
 
 /* ===== 6DOF 弹簧约束 ===== */
 BW_Constraint* bw_6dof_spring_create(

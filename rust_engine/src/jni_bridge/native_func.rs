@@ -2599,48 +2599,29 @@ pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_CopyMaterialMorphResu
 
 // ==================== 物理配置相关 ====================
 
-/// 设置全局物理配置（实时调整）
+/// 设置全局物理配置（Bullet3，实时调整）
 #[no_mangle]
-#[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_com_shiroha_mmdskin_NativeFunc_SetPhysicsConfig(
     _env: JNIEnv,
     _class: JClass,
     gravity_y: jfloat,
     physics_fps: jfloat,
     max_substep_count: jint,
-    _solver_iterations: jint,
-    _pgs_iterations: jint,
-    _max_corrective_velocity: jfloat,
-    _linear_damping_scale: jfloat,
-    _angular_damping_scale: jfloat,
-    _mass_scale: jfloat,
-    _linear_spring_stiffness_scale: jfloat,
-    _angular_spring_stiffness_scale: jfloat,
-    _linear_spring_damping_factor: jfloat,
-    _angular_spring_damping_factor: jfloat,
     inertia_strength: jfloat,
-    _max_linear_velocity: jfloat,
-    _max_angular_velocity: jfloat,
-    _bust_physics_enabled: jboolean,
-    _bust_linear_damping_scale: jfloat,
-    _bust_angular_damping_scale: jfloat,
-    _bust_mass_scale: jfloat,
-    _bust_linear_spring_stiffness_scale: jfloat,
-    _bust_angular_spring_stiffness_scale: jfloat,
-    _bust_linear_spring_damping_factor: jfloat,
-    _bust_angular_spring_damping_factor: jfloat,
-    _bust_clamp_inward: jboolean,
+    max_linear_velocity: jfloat,
+    max_angular_velocity: jfloat,
     joints_enabled: jboolean,
     debug_log: jboolean,
 ) {
     use crate::physics::config::{PhysicsConfig, set_config};
 
-    // Bullet3 简化配置：大部分 Rapier 特定参数已废弃，由 Bullet3 内部处理
     let config = PhysicsConfig {
         gravity_y,
         physics_fps,
         max_substep_count: max_substep_count as i32,
         inertia_strength,
+        max_linear_velocity,
+        max_angular_velocity,
         joints_enabled: joints_enabled != 0,
         debug_log: debug_log != 0,
     };

@@ -17,6 +17,10 @@ pub struct PhysicsConfig {
     pub max_substep_count: i32,
     /// 惯性效果强度（0.0=无惯性, 1.0=正常）
     pub inertia_strength: f32,
+    /// 最大线速度（防止物理爆炸），默认 100.0
+    pub max_linear_velocity: f32,
+    /// 最大角速度（防止物理爆炸），默认 100.0
+    pub max_angular_velocity: f32,
     /// 是否启用关节
     pub joints_enabled: bool,
     /// 调试日志
@@ -29,7 +33,9 @@ impl Default for PhysicsConfig {
             gravity_y: -98.0,
             physics_fps: 60.0,
             max_substep_count: 5,
-            inertia_strength: 1.0,
+            inertia_strength: 0.5,
+            max_linear_velocity: 100.0,
+            max_angular_velocity: 100.0,
             joints_enabled: true,
             debug_log: false,
         }

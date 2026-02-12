@@ -140,10 +140,10 @@ public class ConfigManager {
         return provider != null ? provider.getMaxBones() : 2048;
     }
     
-    // ==================== 物理引擎配置 ====================
+    // ==================== 物理引擎配置（Bullet3） ====================
     
     public static float getPhysicsGravityY() {
-        return provider != null ? provider.getPhysicsGravityY() : -3.8f;
+        return provider != null ? provider.getPhysicsGravityY() : -98.0f;
     }
     
     public static float getPhysicsFps() {
@@ -151,97 +151,19 @@ public class ConfigManager {
     }
     
     public static int getPhysicsMaxSubstepCount() {
-        return provider != null ? provider.getPhysicsMaxSubstepCount() : 4;
-    }
-    
-    public static int getPhysicsSolverIterations() {
-        return provider != null ? provider.getPhysicsSolverIterations() : 4;
-    }
-    
-    public static int getPhysicsPgsIterations() {
-        return provider != null ? provider.getPhysicsPgsIterations() : 2;
-    }
-    
-    public static float getPhysicsMaxCorrectiveVelocity() {
-        return provider != null ? provider.getPhysicsMaxCorrectiveVelocity() : 0.1f;
-    }
-    
-    public static float getPhysicsLinearDampingScale() {
-        return provider != null ? provider.getPhysicsLinearDampingScale() : 0.3f;
-    }
-    
-    public static float getPhysicsAngularDampingScale() {
-        return provider != null ? provider.getPhysicsAngularDampingScale() : 0.2f;
-    }
-    
-    public static float getPhysicsMassScale() {
-        return provider != null ? provider.getPhysicsMassScale() : 2.0f;
-    }
-    
-    public static float getPhysicsLinearSpringStiffnessScale() {
-        return provider != null ? provider.getPhysicsLinearSpringStiffnessScale() : 0.01f;
-    }
-    
-    public static float getPhysicsAngularSpringStiffnessScale() {
-        return provider != null ? provider.getPhysicsAngularSpringStiffnessScale() : 0.01f;
-    }
-    
-    public static float getPhysicsLinearSpringDampingFactor() {
-        return provider != null ? provider.getPhysicsLinearSpringDampingFactor() : 8.0f;
-    }
-    
-    public static float getPhysicsAngularSpringDampingFactor() {
-        return provider != null ? provider.getPhysicsAngularSpringDampingFactor() : 8.0f;
+        return provider != null ? provider.getPhysicsMaxSubstepCount() : 5;
     }
     
     public static float getPhysicsInertiaStrength() {
-        return provider != null ? provider.getPhysicsInertiaStrength() : 1.0f;
+        return provider != null ? provider.getPhysicsInertiaStrength() : 0.5f;
     }
     
     public static float getPhysicsMaxLinearVelocity() {
-        return provider != null ? provider.getPhysicsMaxLinearVelocity() : 1.0f;
+        return provider != null ? provider.getPhysicsMaxLinearVelocity() : 100.0f;
     }
     
     public static float getPhysicsMaxAngularVelocity() {
-        return provider != null ? provider.getPhysicsMaxAngularVelocity() : 1.0f;
-    }
-    
-    // 胸部物理专用参数
-    
-    public static boolean isPhysicsBustEnabled() {
-        return provider != null ? provider.isPhysicsBustEnabled() : true;
-    }
-    
-    public static float getPhysicsBustLinearDampingScale() {
-        return provider != null ? provider.getPhysicsBustLinearDampingScale() : 1.0f;
-    }
-    
-    public static float getPhysicsBustAngularDampingScale() {
-        return provider != null ? provider.getPhysicsBustAngularDampingScale() : 1.0f;
-    }
-    
-    public static float getPhysicsBustMassScale() {
-        return provider != null ? provider.getPhysicsBustMassScale() : 1.0f;
-    }
-    
-    public static float getPhysicsBustLinearSpringStiffnessScale() {
-        return provider != null ? provider.getPhysicsBustLinearSpringStiffnessScale() : 1.0f;
-    }
-    
-    public static float getPhysicsBustAngularSpringStiffnessScale() {
-        return provider != null ? provider.getPhysicsBustAngularSpringStiffnessScale() : 1.0f;
-    }
-    
-    public static float getPhysicsBustLinearSpringDampingFactor() {
-        return provider != null ? provider.getPhysicsBustLinearSpringDampingFactor() : 1.0f;
-    }
-    
-    public static float getPhysicsBustAngularSpringDampingFactor() {
-        return provider != null ? provider.getPhysicsBustAngularSpringDampingFactor() : 1.0f;
-    }
-    
-    public static boolean isPhysicsBustClampInward() {
-        return provider != null ? provider.isPhysicsBustClampInward() : true;
+        return provider != null ? provider.getPhysicsMaxAngularVelocity() : 100.0f;
     }
     
     public static boolean isPhysicsJointsEnabled() {

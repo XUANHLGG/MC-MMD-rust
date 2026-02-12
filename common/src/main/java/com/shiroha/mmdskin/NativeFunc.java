@@ -696,32 +696,14 @@ public class NativeFunc {
     // ========== 物理配置相关 ==========
     
     /**
-     * 设置全局物理配置（实时调整，保存时调用）
-     * @param gravityY 重力 Y 分量（负数向下）
-     * @param physicsFps 物理模拟 FPS
+     * 设置全局物理配置（Bullet3，实时调整）
+     *
+     * @param gravityY 重力 Y 分量（负数向下，MMD 标准 -98.0）
+     * @param physicsFps 物理 FPS（固定时间步）
      * @param maxSubstepCount 每帧最大子步数
-     * @param solverIterations 求解器迭代次数
-     * @param pgsIterations PGS 迭代次数
-     * @param maxCorrectiveVelocity 最大修正速度
-     * @param linearDampingScale 线性阻尼缩放
-     * @param angularDampingScale 角速度阻尼缩放
-     * @param massScale 质量缩放
-     * @param linearSpringStiffnessScale 线性弹簧刚度缩放
-     * @param angularSpringStiffnessScale 角度弹簧刚度缩放
-     * @param linearSpringDampingFactor 线性弹簧阻尼系数
-     * @param angularSpringDampingFactor 角度弹簧阻尼系数
-     * @param inertiaStrength 惯性效果强度
-     * @param maxLinearVelocity 最大线速度
-     * @param maxAngularVelocity 最大角速度
-     * @param bustPhysicsEnabled 胸部物理是否启用
-     * @param bustLinearDampingScale 胸部线性阻尼缩放
-     * @param bustAngularDampingScale 胸部角速度阻尼缩放
-     * @param bustMassScale 胸部质量缩放
-     * @param bustLinearSpringStiffnessScale 胸部线性弹簧刚度缩放
-     * @param bustAngularSpringStiffnessScale 胸部角度弹簧刚度缩放
-     * @param bustLinearSpringDampingFactor 胸部线性弹簧阻尼系数
-     * @param bustAngularSpringDampingFactor 胸部角度弹簧阻尼系数
-     * @param bustClampInward 胸部防凹陷修正是否启用
+     * @param inertiaStrength 惯性效果强度（0.0=无, 1.0=正常）
+     * @param maxLinearVelocity 最大线速度（防止物理爆炸）
+     * @param maxAngularVelocity 最大角速度（防止物理爆炸）
      * @param jointsEnabled 是否启用关节
      * @param debugLog 是否输出调试日志
      */
@@ -729,28 +711,9 @@ public class NativeFunc {
         float gravityY,
         float physicsFps,
         int maxSubstepCount,
-        int solverIterations,
-        int pgsIterations,
-        float maxCorrectiveVelocity,
-        float linearDampingScale,
-        float angularDampingScale,
-        float massScale,
-        float linearSpringStiffnessScale,
-        float angularSpringStiffnessScale,
-        float linearSpringDampingFactor,
-        float angularSpringDampingFactor,
         float inertiaStrength,
         float maxLinearVelocity,
         float maxAngularVelocity,
-        boolean bustPhysicsEnabled,
-        float bustLinearDampingScale,
-        float bustAngularDampingScale,
-        float bustMassScale,
-        float bustLinearSpringStiffnessScale,
-        float bustAngularSpringStiffnessScale,
-        float bustLinearSpringDampingFactor,
-        float bustAngularSpringDampingFactor,
-        boolean bustClampInward,
         boolean jointsEnabled,
         boolean debugLog
     );
