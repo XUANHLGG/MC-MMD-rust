@@ -1,6 +1,8 @@
 package com.shiroha.mmdskin.ui.selector;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ModelConfigData;
+import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import net.minecraft.client.Minecraft;
@@ -194,6 +196,21 @@ public class MaterialVisibilityScreen extends Screen {
         updateCounts();
     }
     
+    @Override
+    public void onClose() {
+        // 保存材质可见性到模型配置
+        ModelConfigData config = ModelConfigManager.getConfig(modelName);
+        config.hiddenMaterials.clear();
+        for (MaterialEntry entry : materials) {
+            if (!entry.visible) {
+                config.hiddenMaterials.add(entry.index);
+            }
+        }
+        ModelConfigManager.saveConfig(modelName, config);
+        
+        super.onClose();
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // 右侧面板背景

@@ -27,6 +27,10 @@ public class ModelConfigData {
     /** 模型整体缩放（默认 1.0） */
     public float modelScale = 1.0f;
     
+    // ==================== 材质可见性 ====================
+    /** 隐藏材质索引列表 */
+    public java.util.List<Integer> hiddenMaterials = new java.util.ArrayList<>();
+    
     /**
      * 从文件加载配置
      */
@@ -55,6 +59,7 @@ public class ModelConfigData {
         c.eyeTrackingEnabled = this.eyeTrackingEnabled;
         c.eyeMaxAngle = this.eyeMaxAngle;
         c.modelScale = this.modelScale;
+        c.hiddenMaterials = new java.util.ArrayList<>(this.hiddenMaterials);
         return c;
     }
     

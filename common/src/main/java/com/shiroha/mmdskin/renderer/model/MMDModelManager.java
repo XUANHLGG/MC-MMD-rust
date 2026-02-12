@@ -2,6 +2,8 @@ package com.shiroha.mmdskin.renderer.model;
 
 import com.shiroha.mmdskin.MmdSkinClient;
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ModelConfigData;
+import com.shiroha.mmdskin.config.ModelConfigManager;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
 import com.shiroha.mmdskin.renderer.core.EntityAnimState;
 import com.shiroha.mmdskin.renderer.core.IMMDModel;
@@ -440,6 +442,17 @@ public class MMDModelManager {
         m.model = model;
         m.modelName = modelName;
         m.entityData = new EntityAnimState(3);
+        
+        // 恢复材质可见性设置
+        ModelConfigData config = ModelConfigManager.getConfig(modelName);
+        if (config != null && !config.hiddenMaterials.isEmpty()) {
+            NativeFunc nf = NativeFunc.GetInst();
+            long handle = model.GetModelLong();
+            for (int index : config.hiddenMaterials) {
+                nf.SetMaterialVisible(handle, index, false);
+            }
+            logger.info("已从配置中恢复 {} 个隐藏材质: {}", config.hiddenMaterials.size(), modelName);
+        }
         
         model.ResetPhysics();
         model.ChangeAnim(MMDAnimManager.GetAnimModel(model, "idle"), 0);
