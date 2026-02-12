@@ -47,6 +47,7 @@ public class ConfigData {
     
     // ==================== 物理引擎配置（Bullet3） ====================
     // 默认值与 Rust PhysicsConfig 保持一致
+    public boolean physicsEnabled = true;
     public float physicsGravityY = -98.0f;
     public float physicsFps = 60.0f;
     public int physicsMaxSubstepCount = 5;

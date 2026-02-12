@@ -8,6 +8,9 @@ package com.shiroha.mmdskin.config;
  */
 public interface IPhysicsConfig {
 
+    /** 是否启用物理模拟（默认 true） */
+    default boolean isPhysicsEnabled() { return true; }
+
     /** 重力 Y 分量（负数向下），默认 -98.0（MMD 标准） */
     default float getPhysicsGravityY() { return -98.0f; }
 

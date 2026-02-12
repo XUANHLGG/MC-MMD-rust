@@ -253,6 +253,16 @@ public class ModConfigScreen {
         ConfigCategory physicsCategory = builder.getOrCreateCategory(
             Component.translatable("gui.mmdskin.mod_settings.category.physics"));
         
+        // 启用物理模拟
+        physicsCategory.addEntry(entryBuilder
+            .startBooleanToggle(
+                Component.translatable("gui.mmdskin.mod_settings.physics_enabled"),
+                data.physicsEnabled)
+            .setDefaultValue(true)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.physics_enabled.tooltip"))
+            .setSaveConsumer(value -> data.physicsEnabled = value)
+            .build());
+        
         // 重力（MMD 标准 -98.0，滑块显示正值）
         physicsCategory.addEntry(entryBuilder
             .startIntSlider(
@@ -342,6 +352,7 @@ public class ModConfigScreen {
             // 同步物理配置到 Rust 引擎
             try {
                 com.shiroha.mmdskin.NativeFunc.GetInst().SetPhysicsConfig(
+                    data.physicsEnabled,
                     data.physicsGravityY,
                     data.physicsFps,
                     data.physicsMaxSubstepCount,
