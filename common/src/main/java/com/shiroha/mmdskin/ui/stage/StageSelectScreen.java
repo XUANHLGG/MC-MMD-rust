@@ -105,6 +105,11 @@ public class StageSelectScreen extends Screen {
         // 恢复上次选择
         restoreSelection(config);
     }
+
+    // MC 1.21.1: 禁用默认背景模糊效果
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
     
     private void restoreSelection(StageConfig config) {
         if (!config.lastStagePack.isEmpty()) {
@@ -511,10 +516,10 @@ public class StageSelectScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseX < panelX || mouseX > panelX + PANEL_WIDTH) return false;
         
-        int scrollAmount = (int) (-delta * (ITEM_HEIGHT + ITEM_SPACING) * 3);
+        int scrollAmount = (int) (-scrollY * (ITEM_HEIGHT + ITEM_SPACING) * 3);
         
         if (mouseY < splitY) {
             // 包列表滚动

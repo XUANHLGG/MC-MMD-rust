@@ -69,6 +69,11 @@ public class MaterialVisibilityScreen extends Screen {
         this.materials = new ArrayList<>();
         loadMaterials();
     }
+
+    // MC 1.21.1: 禁用默认背景模糊效果
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
     
     /**
      * 从当前玩家模型创建界面
@@ -346,13 +351,13 @@ public class MaterialVisibilityScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         // 仅面板区域响应滚动
         if (mouseX >= panelX && mouseX <= panelX + PANEL_WIDTH) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(delta * 24)));
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(scrollY * 24)));
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
     
     @Override

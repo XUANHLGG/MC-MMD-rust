@@ -68,6 +68,11 @@ public class ModelSettingsScreen extends Screen {
         this.parentScreen = parentScreen;
         this.config = ModelConfigManager.getConfig(modelName).copy();
     }
+
+    // MC 1.21.1: 禁用默认背景模糊效果
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
     
     @Override
     protected void init() {

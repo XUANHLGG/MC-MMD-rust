@@ -6,6 +6,8 @@ import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.neoforge.register.MmdSkinAttachments;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.renderer.render.MorphSyncHelper;
+import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
@@ -153,17 +155,17 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
                             break;
                         case 6:
                             if (target != null) {
-                                MmdSkinRendererPlayerHelper.RemoteMorph(target, this.animId);
+                                MorphSyncHelper.applyRemoteMorph(target, this.animId);
                             }
                             break;
                         case 7:
                             if (target != null) {
-                                MmdSkinRendererPlayerHelper.StageAnimStart(target, this.animId);
+                                StageAnimSyncHelper.startStageAnim(target, this.animId);
                             }
                             break;
                         case 8:
                             if (target != null) {
-                                MmdSkinRendererPlayerHelper.StageAnimEnd(target);
+                                StageAnimSyncHelper.endStageAnim(target);
                             }
                             break;
                         case 9:

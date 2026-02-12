@@ -15,6 +15,7 @@ import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
 import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
+import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 
 import java.io.File;
@@ -164,12 +165,11 @@ public class MmdSkinRegisterClient {
                 }
             }
 
-            // 处理所有玩家（包括远程玩家）的 tick，用于音频音量衰减等
-            if (client.level != null) {
-                for (net.minecraft.world.entity.player.Player player : client.level.players()) {
-                    MmdSkinRendererPlayerHelper.tick(player);
-                }
-            }
+        });
+
+        // 远程舞台音频距离衰减（每秒更新一次）
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            StageAudioPlayer.tickRemoteAttenuation();
         });
 
         // 注册实体渲染器
@@ -209,11 +209,13 @@ public class MmdSkinRegisterClient {
                         logger.info("玩家加入服务器，广播模型选择: {}", selectedModel);
                         PlayerModelSyncManager.broadcastLocalModelSelection(player.getUUID(), selectedModel);
                     }
+                    // 请求所有玩家的模型信息
+                    MmdSkinNetworkPack.sendToServer(10, player.getUUID(), "");
                 }
             });
         });
         
-        // 注册玩家断开连接事件（清理远程玩家缓存 + 舞台模式 + 远程舞台动画句柄）
+        // 注册玩家断开连接事件（清理远程玩家缓存 + 舞台模式）
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             MMDCameraController.getInstance().exitStageMode();
             PlayerModelSyncManager.onDisconnect();

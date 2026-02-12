@@ -25,7 +25,7 @@ import org.joml.Vector3f;
 public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
     
     private static final ResourceLocation PLACEHOLDER_TEXTURE = 
-            new ResourceLocation(MmdSkin.MOD_ID, "textures/entity/placeholder.png");
+            ResourceLocation.fromNamespaceAndPath(MmdSkin.MOD_ID, "textures/entity/placeholder.png");
     
     protected final String modelName;
 
@@ -77,25 +77,20 @@ public class MmdSkinRenderer<T extends Entity> extends EntityRenderer<T> {
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen == null) return;
         
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        PoseStack modelViewStack = RenderSystem.getModelViewStack();
-        
-        int posX = (mc.screen.width - 176) / 2;
-        int posY = (mc.screen.height - 166) / 2;
-        modelViewStack.translate(posX + 51, posY + 60, 50.0);
-        modelViewStack.pushPose();
-        modelViewStack.scale(20.0f, 20.0f, -20.0f);
-        modelViewStack.scale(size[1], size[1], size[1]);
+        // MC 1.21.1: 使用传入的 PoseStack 进行渲染（移除 RenderSystem.getModelViewStack()）
+        matrixStack.pushPose();
+        matrixStack.scale(20.0f, 20.0f, -20.0f);
+        matrixStack.scale(size[1], size[1], size[1]);
         
         Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
         rotation.mul(new Quaternionf().rotateX(-entityIn.getXRot() * ((float) Math.PI / 180F)));
         rotation.mul(new Quaternionf().rotateY(-entityIn.getYRot() * ((float) Math.PI / 180F)));
-        modelViewStack.mulPose(rotation);
+        matrixStack.mulPose(rotation);
         
         RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
         model.model.render(entityIn, entityYaw, 0.0f, new Vector3f(0.0f), 
-                          tickDelta, modelViewStack, packedLight, RenderContext.INVENTORY);
-        modelViewStack.popPose();
+                          tickDelta, matrixStack, packedLight, RenderContext.INVENTORY);
+        matrixStack.popPose();
     }
 
     /**

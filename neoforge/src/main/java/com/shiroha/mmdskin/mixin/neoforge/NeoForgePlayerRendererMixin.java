@@ -14,7 +14,6 @@ import com.shiroha.mmdskin.renderer.core.IMMDModel;
 import com.shiroha.mmdskin.renderer.core.RenderContext;
 import com.shiroha.mmdskin.renderer.core.RenderParams;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.model.MMDModelManager.ModelWithEntityData;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -82,40 +81,59 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
         }
 
         String selectedModel = PlayerModelSyncManager.getPlayerModel(player.getUUID(), playerName, isLocalPlayer);
-        if (selectedModel != null && !selectedModel.isEmpty() && !selectedModel.equals("默认 (原版渲染)") && !YsmCompat.isYsmActive(player) && !player.isSpectator()) {
-            // 加载模型（使用玩家名作为缓存键）
-            MMDModelManager.Model modelData = MMDModelManager.GetModel(selectedModel, playerName);
+        
+        // 如果选择了默认渲染或未选择模型，或 YSM 模型处于活跃状态，或处于旁观模式，使用原版渲染
+        if (selectedModel == null || selectedModel.isEmpty() || selectedModel.equals("默认 (原版渲染)") || YsmCompat.isYsmActive(player) || player.isSpectator()) {
+            super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
+            return;
+        }
+        
+        // 加载模型（使用玩家名作为缓存键）
+        MMDModelManager.Model modelData = MMDModelManager.GetModel(selectedModel, playerName);
 
-            // 确保在渲染前清除 OpenGL 错误状态
-            com.mojang.blaze3d.platform.GlStateManager._getError();
-            if (modelData != null) {
-                ModelWithEntityData modelWithData = (ModelWithEntityData) modelData;
-                IMMDModel model = modelWithData.model;
+        // 模型尚未就绪：正在异步加载中则跳过渲染（避免闪现原版模型）
+        if (modelData == null) {
+            if (MMDModelManager.isModelPending(selectedModel, playerName)) {
+                ci.cancel();
+                return;
+            }
+            // 非加载中（模型不存在或加载失败），回退到原版渲染
+            super.render(player, entityYaw, tickDelta, matrixStack, vertexConsumers, packedLight);
+            return;
+        }
+        
+        // 确保在渲染前清除 OpenGL 错误状态
+        com.mojang.blaze3d.platform.GlStateManager._getError();
+        {
+            IMMDModel model = modelData.model;
                 
-                // 加载模型属性
-                modelWithData.loadModelProperties(MmdSkinClient.reloadProperties);
+            // 加载模型属性
+            modelData.loadModelProperties(MmdSkinClient.reloadProperties);
                 
-                // 获取模型尺寸
-                float[] size = getModelSize(modelWithData);
+            // 获取模型尺寸
+            float[] size = getModelSize(modelData);
 
                 // 第一人称模式管理（阶段一：管理头部隐藏状态，在 render 之前）
                 float combinedScale = size[0] * ModelConfigManager.getConfig(selectedModel).modelScale;
-                FirstPersonManager.preRender(NativeFunc.GetInst(), model.GetModelLong(), combinedScale, isLocalPlayer);
+                FirstPersonManager.preRender(NativeFunc.GetInst(), model.getModelHandle(), combinedScale, isLocalPlayer);
                 boolean isFirstPerson = isLocalPlayer && FirstPersonManager.isActive();
 
                 if (isFirstPerson && player.isSwimming()) {
                     ci.cancel();
                 } else {
                     // 更新动画状态（委托给 AnimationStateManager）
-                    AnimationStateManager.updateAnimationState(player, modelWithData);
+                    AnimationStateManager.updateAnimationState(player, modelData);
                     
                     // 计算渲染参数
-                    RenderParams params = calculateRenderParams(player, modelWithData, tickDelta);
+                    RenderParams params = calculateRenderParams(player, modelData, tickDelta);
                     
                     int finalLight = packedLight;
-                    if (modelWithData.entityData.playStageAnim || MMDCameraController.getInstance().isInStageMode()) {
+                    if (modelData.entityData.playStageAnim || MMDCameraController.getInstance().isActive()) {
                         finalLight = LightTexture.pack(15, 15);
                     }
+
+                    // pushPose 隔离缩放，防止泄漏到 EntityRenderDispatcher 的 renderHitbox()
+                    matrixStack.pushPose();
 
                     // 渲染模型
                     if (InventoryRenderHelper.isInventoryScreen()) {
@@ -145,23 +163,24 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
 
                     // 第一人称模式（阶段二：render 之后获取当前帧的眼睛骨骼位置）
                     if (isFirstPerson) {
-                        FirstPersonManager.postRender(NativeFunc.GetInst(), model.GetModelLong());
+                        FirstPersonManager.postRender(NativeFunc.GetInst(), model.getModelHandle());
                     }
 
                     // 渲染手持物品（委托给 ItemRenderHelper）
-                    ItemRenderHelper.renderItems(player, modelWithData, matrixStack, vertexConsumers, packedLight);
+                    ItemRenderHelper.renderItems(player, modelData, matrixStack, vertexConsumers, packedLight);
                     
+                    matrixStack.popPose();
+
                     // 取消原版渲染
                     ci.cancel();
                 }
             }
-        }
     }
     
     /**
      * 计算渲染参数
      */
-    private RenderParams calculateRenderParams(AbstractClientPlayer player, ModelWithEntityData modelData, float tickDelta) {
+    private RenderParams calculateRenderParams(AbstractClientPlayer player, MMDModelManager.Model modelData, float tickDelta) {
         RenderParams params = new RenderParams();
         params.bodyYaw = Mth.rotLerp(tickDelta, player.yBodyRotO, player.yBodyRot);
         params.bodyPitch = 0.0f;
@@ -189,7 +208,7 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
     /**
      * 获取模型尺寸
      */
-    private float[] getModelSize(ModelWithEntityData modelData) {
+    private float[] getModelSize(MMDModelManager.Model modelData) {
         float[] size = new float[2];
         size[0] = getPropertyFloat(modelData, "size", 1.0f);
         size[1] = getPropertyFloat(modelData, "size_in_inventory", 1.0f);
@@ -199,7 +218,7 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
     /**
      * 获取属性浮点值
      */
-    private float getPropertyFloat(ModelWithEntityData modelData, String key, float defaultValue) {
+    private float getPropertyFloat(MMDModelManager.Model modelData, String key, float defaultValue) {
         String value = modelData.properties.getProperty(key);
         return value == null ? defaultValue : Float.parseFloat(value);
     }
@@ -207,7 +226,7 @@ public abstract class NeoForgePlayerRendererMixin extends LivingEntityRenderer<A
     /**
      * 获取属性向量值
      */
-    private Vector3f getPropertyVector(ModelWithEntityData modelData, String key) {
+    private Vector3f getPropertyVector(MMDModelManager.Model modelData, String key) {
         String value = modelData.properties.getProperty(key);
         return value == null ? new Vector3f(0.0f) : MmdSkinClient.str2Vec3f(value);
     }

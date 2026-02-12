@@ -628,9 +628,10 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
         RenderSystem.blendEquation(GL46C.GL_FUNC_ADD);
         RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
         
+        // MC 1.21.1: 需要乘以 RenderSystem.getModelViewMatrix()
         modelViewMatBuff.clear();
         projMatBuff.clear();
-        deliverStack.last().pose().get(modelViewMatBuff);
+        RenderSystem.getModelViewMatrix().mul(deliverStack.last().pose(), new org.joml.Matrix4f()).get(modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(projMatBuff);
         
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);

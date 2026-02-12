@@ -4,8 +4,6 @@ import com.shiroha.mmdskin.config.PathConstants;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.renderer.resource.MMDTextureManager;
 import com.shiroha.mmdskin.renderer.animation.MMDAnimManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -18,7 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import net.minecraft.client.renderer.GameRenderer;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -209,12 +207,7 @@ public class MmdSkinClient {
     }
     
     public static void drawText(String arg, int x, int y){
-        //MinecraftClient MCinstance = MinecraftClient.getInstance();
-        PoseStack mat;
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        mat = RenderSystem.getModelViewStack();
-        mat.pushPose();
-        //instance.textRenderer.draw(mat, arg, x, y, -1);
-        mat.popPose();
+        // MC 1.21.1: RenderSystem.getModelViewStack() 已移除，使用新的渲染 API
+        // 此方法暂不使用，保留空实现
     }
 }

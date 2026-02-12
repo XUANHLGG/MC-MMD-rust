@@ -13,6 +13,7 @@ import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
 import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
+import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.io.File;
@@ -21,7 +22,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.api.distmarker.Dist;
@@ -241,12 +241,8 @@ public class MmdSkinRegisterClient {
                 maidConfigWheelKeyWasDown = false;
             }
 
-            // 处理所有玩家（包括远程玩家）的 tick，用于音频音量衰减等
-            if (mc.level != null) {
-                for (Player player : mc.level.players()) {
-                    MmdSkinRendererPlayerHelper.tick(player);
-                }
-            }
+            // 远程舞台音频距离衰减（每秒更新一次）
+            StageAudioPlayer.tickRemoteAttenuation();
         }
         
         /**
@@ -290,7 +286,7 @@ public class MmdSkinRegisterClient {
         }
         
         /**
-         * 玩家断开连接事件（清理远程玩家缓存 + 舞台模式 + 远程舞台动画句柄）
+         * 玩家断开连接事件（清理远程玩家缓存 + 舞台模式）
          */
         @SubscribeEvent
         public static void onPlayerLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {

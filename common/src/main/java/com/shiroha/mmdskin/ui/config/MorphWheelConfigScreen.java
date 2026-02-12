@@ -56,6 +56,12 @@ public class MorphWheelConfigScreen extends Screen {
         this.parent = parent;
         loadData();
     }
+
+    // MC 1.21.1: 禁用默认背景模糊效果
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        guiGraphics.fill(0, 0, this.width, this.height, 0xC0101010);
+    }
     
     private void loadData() {
         MorphWheelConfig config = MorphWheelConfig.getInstance();
@@ -139,7 +145,7 @@ public class MorphWheelConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
+        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         
         // 标题
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, COLOR_TEXT_PRIMARY);
@@ -281,13 +287,13 @@ public class MorphWheelConfigScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         int panelTop = HEADER_HEIGHT;
         int panelBottom = this.height - FOOTER_HEIGHT;
         int leftPanelX = this.width / 2 - PANEL_WIDTH - 15;
         int rightPanelX = this.width / 2 + 15;
         
-        int scrollAmount = (int) (-delta * 20);
+        int scrollAmount = (int) (-scrollY * 20);
         
         // 左侧面板滚动
         if (mouseX >= leftPanelX && mouseX < leftPanelX + PANEL_WIDTH 
@@ -303,7 +309,7 @@ public class MorphWheelConfigScreen extends Screen {
             return true;
         }
         
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
     
     @Override

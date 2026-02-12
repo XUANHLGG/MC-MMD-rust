@@ -32,6 +32,11 @@ public abstract class AbstractWheelScreen extends Screen {
         this.style = style;
     }
 
+    // MC 1.21.1: 禁用默认背景模糊效果
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
     /** 子类返回当前槽位总数 */
     protected abstract int getSlotCount();
 
@@ -98,8 +103,7 @@ public abstract class AbstractWheelScreen extends Screen {
         int b = color & 0xFF;
         int a = (color >> 24) & 0xFF;
 
-        BufferBuilder buf = Tesselator.getInstance().getBuilder();
-        buf.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
         int steps = 32;
         for (int i = 0; i <= steps; i++) {
@@ -107,13 +111,13 @@ public abstract class AbstractWheelScreen extends Screen {
             float cosA = (float) Math.cos(angle);
             float sinA = (float) Math.sin(angle);
 
-            buf.vertex(matrix, centerX + cosA * innerRadius, centerY + sinA * innerRadius, 0)
-                    .color(r, g, b, a / 2).endVertex();
-            buf.vertex(matrix, centerX + cosA * outerRadius, centerY + sinA * outerRadius, 0)
-                    .color(r, g, b, a).endVertex();
+            buf.addVertex(matrix, centerX + cosA * innerRadius, centerY + sinA * innerRadius, 0)
+                    .setColor(r, g, b, a / 2);
+            buf.addVertex(matrix, centerX + cosA * outerRadius, centerY + sinA * outerRadius, 0)
+                    .setColor(r, g, b, a);
         }
 
-        BufferUploader.drawWithShader(buf.end());
+        BufferUploader.drawWithShader(buf.buildOrThrow());
     }
 
     /** 渲染扇区分隔线 */
@@ -159,21 +163,20 @@ public abstract class AbstractWheelScreen extends Screen {
         int b = style.lineColorDim() & 0xFF;
         int a = (style.lineColorDim() >> 24) & 0xFF;
 
-        BufferBuilder buf = Tesselator.getInstance().getBuilder();
-        buf.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
             float cosA = (float) Math.cos(angle);
             float sinA = (float) Math.sin(angle);
 
-            buf.vertex(matrix, centerX + cosA * (outerRadius - thickness),
-                    centerY + sinA * (outerRadius - thickness), 0).color(r, gC, b, a).endVertex();
-            buf.vertex(matrix, centerX + cosA * (outerRadius + thickness),
-                    centerY + sinA * (outerRadius + thickness), 0).color(r, gC, b, a).endVertex();
+            buf.addVertex(matrix, centerX + cosA * (outerRadius - thickness),
+                    centerY + sinA * (outerRadius - thickness), 0).setColor(r, gC, b, a);
+            buf.addVertex(matrix, centerX + cosA * (outerRadius + thickness),
+                    centerY + sinA * (outerRadius + thickness), 0).setColor(r, gC, b, a);
         }
 
-        BufferUploader.drawWithShader(buf.end());
+        BufferUploader.drawWithShader(buf.buildOrThrow());
         RenderSystem.disableBlend();
     }
 
@@ -190,19 +193,18 @@ public abstract class AbstractWheelScreen extends Screen {
         int bgB = style.centerBg() & 0xFF;
         int bgA = (style.centerBg() >> 24) & 0xFF;
 
-        BufferBuilder buf = Tesselator.getInstance().getBuilder();
-        buf.begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
-        buf.vertex(matrix, centerX, centerY, 0).color(bgR, bgG, bgB, bgA).endVertex();
+        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        buf.addVertex(matrix, centerX, centerY, 0).setColor(bgR, bgG, bgB, bgA);
 
         int steps = 48;
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
-            buf.vertex(matrix,
+            buf.addVertex(matrix,
                     centerX + (float) (Math.cos(angle) * innerRadius),
                     centerY + (float) (Math.sin(angle) * innerRadius), 0)
-                    .color(bgR, bgG, bgB, bgA).endVertex();
+                    .setColor(bgR, bgG, bgB, bgA);
         }
-        BufferUploader.drawWithShader(buf.end());
+        BufferUploader.drawWithShader(buf.buildOrThrow());
 
         // 边框
         float thickness = 3.0f;
@@ -211,19 +213,18 @@ public abstract class AbstractWheelScreen extends Screen {
         int bB = style.centerBorder() & 0xFF;
         int bA = (style.centerBorder() >> 24) & 0xFF;
 
-        buf = Tesselator.getInstance().getBuilder();
-        buf.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= steps; i++) {
             double angle = Math.toRadians(i * 360.0 / steps);
             float cosA = (float) Math.cos(angle);
             float sinA = (float) Math.sin(angle);
 
-            buf.vertex(matrix, centerX + cosA * (innerRadius - thickness),
-                    centerY + sinA * (innerRadius - thickness), 0).color(bR, bG, bB, bA).endVertex();
-            buf.vertex(matrix, centerX + cosA * (innerRadius + thickness),
-                    centerY + sinA * (innerRadius + thickness), 0).color(bR, bG, bB, bA).endVertex();
+            buf.addVertex(matrix, centerX + cosA * (innerRadius - thickness),
+                    centerY + sinA * (innerRadius - thickness), 0).setColor(bR, bG, bB, bA);
+            buf.addVertex(matrix, centerX + cosA * (innerRadius + thickness),
+                    centerY + sinA * (innerRadius + thickness), 0).setColor(bR, bG, bB, bA);
         }
-        BufferUploader.drawWithShader(buf.end());
+        BufferUploader.drawWithShader(buf.buildOrThrow());
         RenderSystem.disableBlend();
 
         // 中心文字（带阴影）
@@ -248,13 +249,12 @@ public abstract class AbstractWheelScreen extends Screen {
         int b = color & 0xFF;
         int a = (color >> 24) & 0xFF;
 
-        BufferBuilder buf = Tesselator.getInstance().getBuilder();
-        buf.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        buf.vertex(matrix, x1 + px, y1 + py, 0).color(r, g, b, a).endVertex();
-        buf.vertex(matrix, x1 - px, y1 - py, 0).color(r, g, b, a).endVertex();
-        buf.vertex(matrix, x2 + px, y2 + py, 0).color(r, g, b, a).endVertex();
-        buf.vertex(matrix, x2 - px, y2 - py, 0).color(r, g, b, a).endVertex();
-        BufferUploader.drawWithShader(buf.end());
+        BufferBuilder buf = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        buf.addVertex(matrix, x1 + px, y1 + py, 0).setColor(r, g, b, a);
+        buf.addVertex(matrix, x1 - px, y1 - py, 0).setColor(r, g, b, a);
+        buf.addVertex(matrix, x2 + px, y2 + py, 0).setColor(r, g, b, a);
+        buf.addVertex(matrix, x2 - px, y2 - py, 0).setColor(r, g, b, a);
+        BufferUploader.drawWithShader(buf.buildOrThrow());
     }
 
     /** 绘制矩形边框 */

@@ -540,9 +540,10 @@ public class MMDModelOpenGL extends AbstractMMDModel {
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);
 
         // 使用预分配的矩阵缓冲区（避免每帧分配）
+        // MC 1.21.1: 需要乘以 RenderSystem.getModelViewMatrix()
         modelViewMatBuff.clear();
         projMatBuff.clear();
-        deliverStack.last().pose().get(modelViewMatBuff);
+        RenderSystem.getModelViewMatrix().mul(deliverStack.last().pose(), new org.joml.Matrix4f()).get(modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(projMatBuff);
 
         //upload Uniforms(MMDShader)
@@ -757,9 +758,10 @@ public class MMDModelOpenGL extends AbstractMMDModel {
         }
         
         // 设置矩阵
+        // MC 1.21.1: 需要乘以 RenderSystem.getModelViewMatrix()
         modelViewMatBuff.clear();
         projMatBuff.clear();
-        deliverStack.last().pose().get(modelViewMatBuff);
+        RenderSystem.getModelViewMatrix().mul(deliverStack.last().pose(), new org.joml.Matrix4f()).get(modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(projMatBuff);
         
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, indexBufferObject);

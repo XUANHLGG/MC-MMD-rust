@@ -233,11 +233,10 @@ public abstract class AbstractMMDModel implements IMMDModel {
     protected static void setupShaderUniforms(ShaderInstance shader, PoseStack deliverStack,
                                                Vector3f light0Dir, Vector3f light1Dir, int lightMapTex) {
         if (shader.MODEL_VIEW_MATRIX != null)
-            shader.MODEL_VIEW_MATRIX.set(deliverStack.last().pose());
+            shader.MODEL_VIEW_MATRIX.set(RenderSystem.getModelViewMatrix().mul(deliverStack.last().pose(), new org.joml.Matrix4f()));
         if (shader.PROJECTION_MATRIX != null)
             shader.PROJECTION_MATRIX.set(RenderSystem.getProjectionMatrix());
-        if (shader.INVERSE_VIEW_ROTATION_MATRIX != null)
-            shader.INVERSE_VIEW_ROTATION_MATRIX.set(RenderSystem.getInverseViewRotationMatrix());
+        // MC 1.21.1: INVERSE_VIEW_ROTATION_MATRIX 已移除
         if (shader.COLOR_MODULATOR != null)
             shader.COLOR_MODULATOR.set(RenderSystem.getShaderColor());
         if (shader.LIGHT0_DIRECTION != null)
