@@ -115,8 +115,20 @@ public class PerformanceHud {
         int texCount = MMDTextureManager.getTextureCount();
         long texVram = MMDTextureManager.getTotalTextureVram();
         
-        addLine(String.format("  \u6a21\u578b   \u5f53\u524d %d  \u7d2f\u8ba1 %d", curModels, totalLoaded), VALUE_COLOR);
-        addLine(String.format("  \u7eb9\u7406   %d \u5f20  VRAM %s", texCount, fmtB(texVram)), VALUE_COLOR);
+        int modelPending = MMDModelManager.getCachePendingReleaseCount();
+        if (modelPending > 0) {
+            addLine(String.format("  \u6a21\u578b   \u5f53\u524d %d  \u5f85\u91ca\u653e %d  \u7d2f\u8ba1 %d", curModels, modelPending, totalLoaded), VALUE_COLOR);
+        } else {
+            addLine(String.format("  \u6a21\u578b   \u5f53\u524d %d  \u7d2f\u8ba1 %d", curModels, totalLoaded), VALUE_COLOR);
+        }
+        int pendingCount = MMDTextureManager.getPendingReleaseCount();
+        long pendingVram = MMDTextureManager.getPendingReleaseVram();
+        if (pendingCount > 0) {
+            addLine(String.format("  \u7eb9\u7406   %d \u5f20  VRAM %s (待释放 %d \u5f20 %s)",
+                    texCount, fmtB(texVram), pendingCount, fmtB(pendingVram)), VALUE_COLOR);
+        } else {
+            addLine(String.format("  \u7eb9\u7406   %d \u5f20  VRAM %s", texCount, fmtB(texVram)), VALUE_COLOR);
+        }
         
         // 汇总 RAM/VRAM
         long totalRam = 0, totalVram = 0;

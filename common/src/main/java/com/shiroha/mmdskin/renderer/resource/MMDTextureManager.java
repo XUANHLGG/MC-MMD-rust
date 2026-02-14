@@ -1,9 +1,14 @@
 package com.shiroha.mmdskin.renderer.resource;
 
 import com.shiroha.mmdskin.NativeFunc;
+import com.shiroha.mmdskin.config.ConfigManager;
+
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -11,22 +16,40 @@ import org.lwjgl.opengl.GL46C;
 
 /**
  * MMD 纹理管理器
- * 负责纹理的加载和缓存，支持两阶段异步加载：
+ * 负责纹理的加载、缓存和生命周期管理。
+ * 
+ * 支持两阶段异步加载：
  * 1. preloadTexture() — 后台线程调用，Rust 解码图片 + 拷贝像素到 Java ByteBuffer
  * 2. GetTexture() — 渲染线程调用，如果有预解码数据则只做 GL 上传
+ * 
+ * 引用计数 + 延迟释放机制：
+ * - 模型创建时通过 addRef() 增加纹理引用计数
+ * - 模型 dispose 时通过 release() 减少引用计数
+ * - 引用归零后纹理进入延迟释放队列（pendingRelease）
+ * - tick() 定期扫描：超过 TTL 或超出 VRAM 软预算时真正释放 GL 纹理
+ * - 新模型加载时若命中 pendingRelease 则直接复用，避免重复加载
  */
 public class MMDTextureManager {
-    public static final Logger logger = LogManager.getLogger();
-    static NativeFunc nf;
-    static Map<String, Texture> textures;
+    private static final Logger logger = LogManager.getLogger();
+    private static NativeFunc nf;
+    
+    /** 活跃纹理（refCount > 0） */
+    private static Map<String, Texture> textures;
+    
+    /** 延迟释放队列（refCount == 0，等待 TTL 超时或预算淘汰） */
+    private static final Map<String, Texture> pendingRelease = new ConcurrentHashMap<>();
     
     /** 后台线程预解码的纹理数据（尚未上传到 GL） */
     private static final Map<String, PredecodedTexture> predecodedTextures = new ConcurrentHashMap<>();
+    
+    /** 延迟释放超时时间（毫秒） */
+    private static final long TEXTURE_TTL_MS = 60_000;
 
     public static void Init() {
         nf = NativeFunc.GetInst();
         textures = new ConcurrentHashMap<>();
-        logger.info("MMDTextureManager 初始化完成");
+        pendingRelease.clear();
+        logger.info("MMDTextureManager 初始化完成（引用计数模式）");
     }
     
     /**
@@ -36,8 +59,9 @@ public class MMDTextureManager {
      * @param filename 纹理文件完整路径
      */
     public static void preloadTexture(String filename) {
-        // 已有 GL 纹理或已预解码，跳过
-        if (textures.containsKey(filename) || predecodedTextures.containsKey(filename)) {
+        // 已有 GL 纹理、待释放纹理或已预解码，跳过
+        if (textures.containsKey(filename) || pendingRelease.containsKey(filename)
+                || predecodedTextures.containsKey(filename)) {
             return;
         }
         
@@ -77,55 +101,71 @@ public class MMDTextureManager {
         predecodedTextures.clear();
     }
 
+    /**
+     * 获取纹理（渲染线程调用）
+     * 优先从活跃缓存获取，其次检查延迟释放队列（复用），最后加载新纹理。
+     * 返回的纹理 refCount 不变，需由调用者通过 addRef() 管理。
+     */
     public static Texture GetTexture(String filename) {
+        // 1. 活跃缓存命中
         Texture result = textures.get(filename);
-        if (result == null) {
-            // 检查是否有后台预解码的数据
-            PredecodedTexture predecoded = predecodedTextures.remove(filename);
-            if (predecoded != null) {
-                // 有预解码数据，只做 GL 上传（极快）
-                result = uploadPredecodedTexture(predecoded);
-                textures.put(filename, result);
-                return result;
-            }
-            
-            // 无预解码数据，走原来的全量加载（同步）
-            long nfTex = nf.LoadTexture(filename);
-            if (nfTex == 0) {
-                logger.info("纹理未找到: {}", filename);
-                return null;
-            }
-            int x = nf.GetTextureX(nfTex);
-            int y = nf.GetTextureY(nfTex);
-            long texData = nf.GetTextureData(nfTex);
-            boolean hasAlpha = nf.TextureHasAlpha(nfTex);
-
-            int tex = GL46C.glGenTextures();
-            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, tex);
-            int texSize = x * y * (hasAlpha ? 4 : 3);
-            ByteBuffer texBuffer = ByteBuffer.allocateDirect(texSize);
-            nf.CopyDataToByteBuffer(texBuffer, texData, texSize);
-            texBuffer.rewind();
-            if (hasAlpha) {
-                GL46C.glPixelStorei(GL46C.GL_UNPACK_ALIGNMENT, 4);
-                GL46C.glTexImage2D(GL46C.GL_TEXTURE_2D, 0, GL46C.GL_RGBA, x, y, 0, GL46C.GL_RGBA, GL46C.GL_UNSIGNED_BYTE, texBuffer);
-            } else {
-                GL46C.glPixelStorei(GL46C.GL_UNPACK_ALIGNMENT, 1);
-                GL46C.glTexImage2D(GL46C.GL_TEXTURE_2D, 0, GL46C.GL_RGB, x, y, 0, GL46C.GL_RGB, GL46C.GL_UNSIGNED_BYTE, texBuffer);
-            }
-            nf.DeleteTexture(nfTex);
-
-            GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MAX_LEVEL, 0);
-            GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MIN_FILTER, GL46C.GL_LINEAR);
-            GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MAG_FILTER, GL46C.GL_LINEAR);
-            GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, 0);
-
-            result = new Texture();
-            result.tex = tex;
-            result.hasAlpha = hasAlpha;
-            result.vramSize = (long) x * y * (hasAlpha ? 4 : 3);
-            textures.put(filename, result);
+        if (result != null) {
+            return result;
         }
+        
+        // 2. 检查延迟释放队列（复用已加载但 refCount 归零的纹理）
+        result = pendingRelease.remove(filename);
+        if (result != null) {
+            result.refCount.set(0); // 重置，等调用者 addRef
+            textures.put(filename, result);
+            logger.debug("从延迟释放队列复用纹理: {}", filename);
+            return result;
+        }
+        
+        // 3. 检查预解码数据
+        PredecodedTexture predecoded = predecodedTextures.remove(filename);
+        if (predecoded != null) {
+            result = uploadPredecodedTexture(predecoded);
+            textures.put(filename, result);
+            return result;
+        }
+        
+        // 4. 全量同步加载
+        long nfTex = nf.LoadTexture(filename);
+        if (nfTex == 0) {
+            logger.info("纹理未找到: {}", filename);
+            return null;
+        }
+        int x = nf.GetTextureX(nfTex);
+        int y = nf.GetTextureY(nfTex);
+        long texData = nf.GetTextureData(nfTex);
+        boolean hasAlpha = nf.TextureHasAlpha(nfTex);
+
+        int tex = GL46C.glGenTextures();
+        GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, tex);
+        int texSize = x * y * (hasAlpha ? 4 : 3);
+        ByteBuffer texBuffer = ByteBuffer.allocateDirect(texSize);
+        nf.CopyDataToByteBuffer(texBuffer, texData, texSize);
+        texBuffer.rewind();
+        if (hasAlpha) {
+            GL46C.glPixelStorei(GL46C.GL_UNPACK_ALIGNMENT, 4);
+            GL46C.glTexImage2D(GL46C.GL_TEXTURE_2D, 0, GL46C.GL_RGBA, x, y, 0, GL46C.GL_RGBA, GL46C.GL_UNSIGNED_BYTE, texBuffer);
+        } else {
+            GL46C.glPixelStorei(GL46C.GL_UNPACK_ALIGNMENT, 1);
+            GL46C.glTexImage2D(GL46C.GL_TEXTURE_2D, 0, GL46C.GL_RGB, x, y, 0, GL46C.GL_RGB, GL46C.GL_UNSIGNED_BYTE, texBuffer);
+        }
+        nf.DeleteTexture(nfTex);
+
+        GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MAX_LEVEL, 0);
+        GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MIN_FILTER, GL46C.GL_LINEAR);
+        GL46C.glTexParameteri(GL46C.GL_TEXTURE_2D, GL46C.GL_TEXTURE_MAG_FILTER, GL46C.GL_LINEAR);
+        GL46C.glBindTexture(GL46C.GL_TEXTURE_2D, 0);
+
+        result = new Texture();
+        result.tex = tex;
+        result.hasAlpha = hasAlpha;
+        result.vramSize = (long) x * y * (hasAlpha ? 4 : 3);
+        textures.put(filename, result);
         return result;
     }
     
@@ -160,42 +200,168 @@ public class MMDTextureManager {
         return result;
     }
 
+    // ==================== 引用计数管理 ====================
+    
     /**
-     * 清理所有缓存的纹理
+     * 增加纹理引用计数（模型创建时调用）
+     * @param filename 纹理文件路径
+     */
+    public static void addRef(String filename) {
+        Texture tex = textures.get(filename);
+        if (tex != null) {
+            tex.refCount.incrementAndGet();
+        }
+    }
+    
+    /**
+     * 减少纹理引用计数（模型 dispose 时调用）
+     * 引用归零后移入延迟释放队列，等待 TTL 超时或预算淘汰后真正释放。
+     * 
+     * @param filename 纹理文件路径
+     */
+    public static void release(String filename) {
+        if (filename == null || textures == null) return;
+        Texture tex = textures.get(filename);
+        if (tex == null) return;
+        
+        int remaining = tex.refCount.decrementAndGet();
+        if (remaining <= 0) {
+            tex.refCount.set(0); // 防止意外负数
+            tex.lastReleaseTime = System.currentTimeMillis();
+            textures.remove(filename);
+            pendingRelease.put(filename, tex);
+            logger.debug("纹理引用归零，移入延迟释放队列: {}", filename);
+        }
+    }
+    
+    /**
+     * 批量释放纹理引用（模型 dispose 时调用）
+     * @param filenames 纹理文件路径列表
+     */
+    public static void releaseAll(List<String> filenames) {
+        if (filenames == null) return;
+        for (String filename : filenames) {
+            release(filename);
+        }
+    }
+    
+    // ==================== 定期 GC ====================
+    
+    /**
+     * 定期扫描延迟释放队列，释放超时或超预算的纹理（在渲染线程调用）
+     */
+    public static void tick() {
+        if (pendingRelease.isEmpty()) return;
+        
+        long now = System.currentTimeMillis();
+        long budgetBytes = ConfigManager.getTextureCacheBudgetMB() * 1024L * 1024L;
+        
+        // 1. 释放超过 TTL 的纹理
+        List<String> expired = new ArrayList<>();
+        for (var entry : pendingRelease.entrySet()) {
+            if (now - entry.getValue().lastReleaseTime > TEXTURE_TTL_MS) {
+                expired.add(entry.getKey());
+            }
+        }
+        for (String key : expired) {
+            Texture tex = pendingRelease.remove(key);
+            if (tex != null) {
+                deleteGlTexture(tex);
+                logger.debug("纹理 TTL 超时释放: {}", key);
+            }
+        }
+        
+        // 2. 检查 pendingRelease 总 VRAM 是否超出软预算
+        long pendingVram = getPendingReleaseVram();
+        if (pendingVram > budgetBytes && !pendingRelease.isEmpty()) {
+            evictByLRU(pendingVram, budgetBytes);
+        }
+    }
+    
+    /**
+     * 按 LRU 淘汰延迟释放队列中的纹理，直到 VRAM 降到预算以下
+     */
+    private static synchronized void evictByLRU(long currentVram, long budgetBytes) {
+        if (pendingRelease.isEmpty()) return;
+        
+        // 按 lastReleaseTime 排序，最早释放的优先淘汰
+        List<Map.Entry<String, Texture>> sorted = new ArrayList<>(pendingRelease.entrySet());
+        sorted.sort((a, b) -> Long.compare(a.getValue().lastReleaseTime, b.getValue().lastReleaseTime));
+        
+        long remaining = currentVram;
+        int evicted = 0;
+        for (var entry : sorted) {
+            if (remaining <= budgetBytes) break;
+            Texture tex = pendingRelease.remove(entry.getKey());
+            if (tex != null) {
+                remaining -= tex.vramSize;
+                deleteGlTexture(tex);
+                evicted++;
+            }
+        }
+        if (evicted > 0) {
+            logger.info("VRAM 预算淘汰 {} 个纹理，剩余待释放 VRAM: {}", evicted, remaining);
+        }
+    }
+    
+    /** 删除 GL 纹理对象 */
+    private static void deleteGlTexture(Texture tex) {
+        if (tex != null && tex.tex > 0) {
+            GL46C.glDeleteTextures(tex.tex);
+            tex.tex = 0;
+        }
+    }
+    
+    // ==================== 清理 ====================
+    
+    /**
+     * 清理所有缓存的纹理（包括活跃和待释放）
      */
     public static void Cleanup() {
         if (textures != null) {
             int count = textures.size();
             for (Texture tex : textures.values()) {
-                if (tex.tex > 0) {
-                    GL46C.glDeleteTextures(tex.tex);
-                }
+                deleteGlTexture(tex);
             }
             textures.clear();
-            logger.info("MMDTextureManager 已清理 {} 个纹理", count);
+            logger.info("MMDTextureManager 已清理 {} 个活跃纹理", count);
+        }
+        int pendingCount = pendingRelease.size();
+        for (Texture tex : pendingRelease.values()) {
+            deleteGlTexture(tex);
+        }
+        pendingRelease.clear();
+        if (pendingCount > 0) {
+            logger.info("MMDTextureManager 已清理 {} 个待释放纹理", pendingCount);
         }
     }
     
     /**
-     * 删除单个纹理
+     * 删除单个纹理（强制，不走引用计数）
      */
     public static void DeleteTexture(String filename) {
         if (textures != null) {
             Texture tex = textures.remove(filename);
-            if (tex != null && tex.tex > 0) {
-                GL46C.glDeleteTextures(tex.tex);
-            }
+            deleteGlTexture(tex);
         }
+        Texture pending = pendingRelease.remove(filename);
+        deleteGlTexture(pending);
     }
+    
+    // ==================== 统计查询 ====================
     
     public static class Texture {
         public int tex;
         public boolean hasAlpha;
         /** 纹理在 GPU 上的显存占用（字节） */
         public long vramSize;
+        /** 引用计数 */
+        final AtomicInteger refCount = new AtomicInteger(0);
+        /** 引用归零时的时间戳 */
+        volatile long lastReleaseTime;
     }
     
-    /** 获取所有已加载纹理的总显存占用（字节） */
+    /** 获取活跃纹理的总显存占用（字节） */
     public static long getTotalTextureVram() {
         if (textures == null) return 0;
         long total = 0;
@@ -205,9 +371,23 @@ public class MMDTextureManager {
         return total;
     }
     
-    /** 获取已加载纹理数量 */
+    /** 获取活跃纹理数量 */
     public static int getTextureCount() {
         return textures != null ? textures.size() : 0;
+    }
+    
+    /** 获取延迟释放队列中的纹理数量 */
+    public static int getPendingReleaseCount() {
+        return pendingRelease.size();
+    }
+    
+    /** 获取延迟释放队列的总 VRAM 占用（字节） */
+    public static long getPendingReleaseVram() {
+        long total = 0;
+        for (Texture tex : pendingRelease.values()) {
+            total += tex.vramSize;
+        }
+        return total;
     }
     
     /** 后台线程预解码的纹理数据（像素数据 + 尺寸，尚未上传到 GL） */

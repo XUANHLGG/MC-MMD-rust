@@ -25,6 +25,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * GPU 蒙皮 MMD 模型渲染器
@@ -343,26 +345,32 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
             GL46C.glBindBuffer(GL46C.GL_ARRAY_BUFFER, uv2Vbo);
             GL46C.glBufferData(GL46C.GL_ARRAY_BUFFER, vertexCount * 8, GL46C.GL_DYNAMIC_DRAW);
             
-            // 材质
+            // 材质（记录纹理引用键）
+            List<String> texKeys = new ArrayList<>();
             MMDMaterial[] mats = new MMDMaterial[(int) nf.GetMaterialCount(model)];
             for (int i = 0; i < mats.length; ++i) {
                 mats[i] = new MMDMaterial();
                 String texFilename = nf.GetMaterialTex(model, i);
-                if (!texFilename.isEmpty()) {
+                if (texFilename != null && !texFilename.isEmpty()) {
                     MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(texFilename);
                     if (mgrTex != null) {
                         mats[i].tex = mgrTex.tex;
                         mats[i].hasAlpha = mgrTex.hasAlpha;
+                        MMDTextureManager.addRef(texFilename);
+                        texKeys.add(texFilename);
                     }
                 }
             }
             
             // lightMap 材质
             lightMapMaterial = new MMDMaterial();
-            MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(modelDir + "/lightMap.png");
+            String lightMapPath = modelDir + "/lightMap.png";
+            MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(lightMapPath);
             if (mgrTex != null) {
                 lightMapMaterial.tex = mgrTex.tex;
                 lightMapMaterial.hasAlpha = mgrTex.hasAlpha;
+                MMDTextureManager.addRef(lightMapPath);
+                texKeys.add(lightMapPath);
             } else {
                 lightMapMaterial.tex = GL46C.glGenTextures();
                 lightMapMaterial.ownsTexture = true;
@@ -460,6 +468,7 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
             result.indexType = indexType;
             result.mats = mats;
             result.lightMapMaterial = lightMapMaterial;
+            result.textureKeys = texKeys;
             result.modelViewMatBuff = modelViewMatBuff;
             result.projMatBuff = projMatBuff;
             result.vertexMorphCount = morphCount;
@@ -1146,6 +1155,7 @@ public class MMDModelGpuSkinning extends AbstractMMDModel {
     public void dispose() {
         if (!initialized) return;
         initialized = false;
+        releaseTextures();
         disposeModelHandle();
         
         // 释放 OpenGL 资源

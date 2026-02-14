@@ -21,6 +21,7 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.List;
 
 /**
  * MMD 模型抽象基类（SRP + LoD）
@@ -53,6 +54,9 @@ public abstract class AbstractMMDModel implements IMMDModel {
     protected FloatBuffer materialMorphResultsBuffer;
     protected ByteBuffer materialMorphResultsByteBuffer;
     protected int materialMorphResultCount = 0;
+
+    // 纹理引用键（dispose 时用于批量释放引用计数）
+    protected List<String> textureKeys;
 
     // ===== NativeFunc 访问 =====
 
@@ -209,6 +213,14 @@ public abstract class AbstractMMDModel implements IMMDModel {
         if (model != 0) {
             getNf().DeleteModel(model);
             model = 0;
+        }
+    }
+
+    /** 释放该模型引用的所有纹理（减少引用计数） */
+    protected void releaseTextures() {
+        if (textureKeys != null) {
+            com.shiroha.mmdskin.renderer.resource.MMDTextureManager.releaseAll(textureKeys);
+            textureKeys = null;
         }
     }
 

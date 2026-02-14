@@ -15,6 +15,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.TextureManager;
@@ -181,26 +183,32 @@ public class MMDModelOpenGL extends AbstractMMDModel {
                 default -> 0;
             };
 
-            //Material
+            //Material（记录纹理引用键）
+            List<String> texKeys = new ArrayList<>();
             MMDMaterial[] mats = new MMDMaterial[(int) nf.GetMaterialCount(model)];
             for (int i = 0; i < mats.length; ++i) {
                 mats[i] = new MMDMaterial();
                 String texFilename = nf.GetMaterialTex(model, i);
-                if (!texFilename.isEmpty()) {
+                if (texFilename != null && !texFilename.isEmpty()) {
                     MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(texFilename);
                     if (mgrTex != null) {
                         mats[i].tex = mgrTex.tex;
                         mats[i].hasAlpha = mgrTex.hasAlpha;
+                        MMDTextureManager.addRef(texFilename);
+                        texKeys.add(texFilename);
                     }
                 }
             }
 
             //lightMap
             lightMapMaterial = new MMDMaterial();
-            MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(modelDir + "/lightMap.png");
+            String lightMapPath = modelDir + "/lightMap.png";
+            MMDTextureManager.Texture mgrTex = MMDTextureManager.GetTexture(lightMapPath);
             if (mgrTex != null) {
                 lightMapMaterial.tex = mgrTex.tex;
                 lightMapMaterial.hasAlpha = mgrTex.hasAlpha;
+                MMDTextureManager.addRef(lightMapPath);
+                texKeys.add(lightMapPath);
             }else{
                 lightMapMaterial.tex = GL46C.glGenTextures();
                 lightMapMaterial.ownsTexture = true;
@@ -283,6 +291,7 @@ public class MMDModelOpenGL extends AbstractMMDModel {
             result.mats = mats;
             result.lightMapMaterial = lightMapMaterial;
             result.hasUvMorph = nf.GetUvMorphCount(model) > 0;
+            result.textureKeys = texKeys;
             
             // 预分配矩阵缓冲区（避免每帧分配）
             modelViewMatBuff = MemoryUtil.memAllocFloat(16);
@@ -342,6 +351,7 @@ public class MMDModelOpenGL extends AbstractMMDModel {
 
     @Override
     public void dispose() {
+        releaseTextures();
         disposeModelHandle();
         
         // 释放预分配的矩阵缓冲区

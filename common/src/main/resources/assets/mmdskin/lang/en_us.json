@@ -101,6 +101,9 @@
   "gui.mmdskin.stage.esc_hint": "Press ESC again to exit dance",
   "gui.mmdskin.stage.mouse_released": "Mouse released — Right-click window to recapture",
   
+  "gui.mmdskin.mod_settings.texture_cache_budget": "Texture Cache Budget",
+  "gui.mmdskin.mod_settings.texture_cache_budget.tooltip": "Texture cache VRAM soft budget (MB). Only constrains unreferenced pending-release textures, does not affect active textures. Lower to save VRAM, raise for faster model switching",
+  
   "gui.mmdskin.mod_settings.category.debug": "Debug Settings",
   "gui.mmdskin.mod_settings.debug_hud": "Performance Debug HUD",
   "gui.mmdskin.mod_settings.debug_hud.tooltip": "Show model memory/VRAM usage info on the top-left corner of the screen"

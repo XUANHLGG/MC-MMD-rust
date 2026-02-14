@@ -86,8 +86,8 @@ public class ModConfigScreen {
         performanceCategory.addEntry(entryBuilder
             .startIntSlider(
                 Component.translatable("gui.mmdskin.mod_settings.model_pool_max"),
-                data.modelPoolMaxCount, 10, 500)
-            .setDefaultValue(100)
+                data.modelPoolMaxCount, 5, 100)
+            .setDefaultValue(20)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.model_pool_max.tooltip"))
             .setSaveConsumer(value -> data.modelPoolMaxCount = value)
             .build());
@@ -117,6 +117,16 @@ public class ModConfigScreen {
             .setDefaultValue(2048)
             .setTooltip(Component.translatable("gui.mmdskin.mod_settings.max_bones.tooltip"))
             .setSaveConsumer(value -> data.maxBones = value)
+            .build());
+        
+        performanceCategory.addEntry(entryBuilder
+            .startIntSlider(
+                Component.translatable("gui.mmdskin.mod_settings.texture_cache_budget"),
+                data.textureCacheBudgetMB, 64, 1024)
+            .setDefaultValue(256)
+            .setTooltip(Component.translatable("gui.mmdskin.mod_settings.texture_cache_budget.tooltip"))
+            .setTextGetter(value -> Component.literal(value + " MB"))
+            .setSaveConsumer(value -> data.textureCacheBudgetMB = value)
             .build());
         
         // Toon 渲染设置分类（3渲2）

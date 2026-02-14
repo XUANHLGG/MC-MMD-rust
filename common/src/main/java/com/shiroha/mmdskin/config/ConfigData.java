@@ -21,7 +21,7 @@ public class ConfigData {
     
     // 渲染设置
     public boolean openGLEnableLighting = true;
-    public int modelPoolMaxCount = 100;
+    public int modelPoolMaxCount = 20;
     public boolean mmdShaderEnabled = false;
     
     // GPU 加速
@@ -61,6 +61,9 @@ public class ConfigData {
     public boolean firstPersonModelEnabled = false;
     public float firstPersonCameraForwardOffset = 0.0f;
     public float firstPersonCameraVerticalOffset = 0.0f;
+    
+    // 纹理缓存
+    public int textureCacheBudgetMB = 256;
     
     // 调试
     public boolean debugHudEnabled = false;

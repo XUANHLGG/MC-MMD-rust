@@ -35,7 +35,7 @@ public class ConfigManager {
      * 获取模型池最大数量
      */
     public static int getModelPoolMaxCount() {
-        return provider != null ? provider.getModelPoolMaxCount() : 100;
+        return provider != null ? provider.getModelPoolMaxCount() : 20;
     }
     
     /**
@@ -199,6 +199,16 @@ public class ConfigManager {
      */
     public static float getFirstPersonCameraVerticalOffset() {
         return provider != null ? provider.getFirstPersonCameraVerticalOffset() : 0.0f;
+    }
+    
+    // ==================== 纹理缓存设置 ====================
+    
+    /**
+     * 获取纹理缓存 VRAM 软预算（MB）
+     * 仅约束延迟释放队列，不限制活跃纹理
+     */
+    public static int getTextureCacheBudgetMB() {
+        return provider != null ? provider.getTextureCacheBudgetMB() : 256;
     }
     
     // ==================== 调试设置 ====================

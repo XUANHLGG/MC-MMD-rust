@@ -106,6 +106,8 @@ public class MMDModelManager {
     public static Model GetModel(String modelName, String cacheKey) {
         // 定期检查延迟清理（从渲染器移至此处，每帧至少调用一次）
         modelCache.tick(MMDModelManager::disposeModel);
+        // 驱动纹理缓存 GC（延迟释放 + VRAM 预算淘汰）
+        MMDTextureManager.tick();
         
         String fullCacheKey = modelName + "_" + cacheKey;
         
@@ -153,8 +155,6 @@ public class MMDModelManager {
         failedLoads.remove(fullCacheKey);
         
         // 4. 缓存未命中且无后台任务 → 启动 Phase 1 后台加载
-        modelCache.checkAndClean(MMDModelManager::disposeModel);
-        
         ModelInfo modelInfo = ModelInfo.findByFolderName(modelName);
         if (modelInfo == null) {
             logger.warn("模型未找到: {}", modelName);
@@ -311,24 +311,12 @@ public class MMDModelManager {
     }
     
     /**
-     * 记录模型切换事件，触发延迟清理
-     */
-    public static void onModelSwitch() {
-        modelCache.onSwitch();
-    }
-    
-    /**
      * 强制重载指定模型（立即清除缓存并重新加载）
      * 适用于模型切换时需要立即释放旧模型资源的场景
-     * 
-     * @param modelName 模型名称
      */
     public static void forceReloadModel(String modelName) {
-        // 取消该模型的后台加载任务
         String prefix = modelName + "_";
-        // 递增代次，让正在运行的后台任务自行清理
         loadGeneration.incrementAndGet();
-        // 清理已完成但未消费的 Future 中的句柄
         pendingLoads.entrySet().removeIf(entry -> {
             if (entry.getKey().startsWith(prefix)) {
                 cleanupFutureHandle(entry.getValue());
@@ -338,35 +326,15 @@ public class MMDModelManager {
         });
         failedLoads.entrySet().removeIf(entry -> entry.getKey().startsWith(prefix));
         MMDTextureManager.clearPreloaded();
-        
-        // 收集所有与该模型相关的缓存键
-        java.util.List<String> keysToRemove = new java.util.ArrayList<>();
-        modelCache.forEach((key, entry) -> {
-            if (key.startsWith(prefix)) {
-                keysToRemove.add(key);
-            }
-        });
-        
-        // 释放并移除
-        for (String key : keysToRemove) {
-            ModelCache.CacheEntry<Model> entry = modelCache.remove(key);
-            if (entry != null) {
-                disposeModel(entry.value);
-                logger.info("强制释放模型: {}", key);
-            }
-        }
+        modelCache.removeMatching(key -> key.startsWith(prefix), MMDModelManager::disposeModel);
     }
     
     /**
      * 强制重载指定玩家的所有模型缓存（不影响其他玩家）
-     * 适用于玩家切换模型时，仅清除自己的旧模型
-     * 
-     * @param playerCacheKey 玩家缓存键（通常是玩家名）
      */
     public static void forceReloadPlayerModels(String playerCacheKey) {
         String suffix = "_" + playerCacheKey;
-        
-        // 取消该玩家相关的后台加载
+        loadGeneration.incrementAndGet();
         pendingLoads.entrySet().removeIf(entry -> {
             if (entry.getKey().endsWith(suffix)) {
                 cleanupFutureHandle(entry.getValue());
@@ -375,23 +343,7 @@ public class MMDModelManager {
             return false;
         });
         failedLoads.entrySet().removeIf(entry -> entry.getKey().endsWith(suffix));
-        
-        // 收集该玩家的缓存键
-        java.util.List<String> keysToRemove = new java.util.ArrayList<>();
-        modelCache.forEach((key, entry) -> {
-            if (key.endsWith(suffix)) {
-                keysToRemove.add(key);
-            }
-        });
-        
-        // 释放并移除
-        for (String key : keysToRemove) {
-            ModelCache.CacheEntry<Model> entry = modelCache.remove(key);
-            if (entry != null) {
-                disposeModel(entry.value);
-                logger.info("强制释放玩家模型: {}", key);
-            }
-        }
+        modelCache.removeMatching(key -> key.endsWith(suffix), MMDModelManager::disposeModel);
     }
     
     /**
@@ -524,6 +476,11 @@ public class MMDModelManager {
      */
     public static int getPendingLoadCount() {
         return pendingLoads.size();
+    }
+    
+    /** 获取模型缓存中待释放的模型数量 */
+    public static int getCachePendingReleaseCount() {
+        return modelCache != null ? modelCache.pendingSize() : 0;
     }
     
     /**

@@ -20,6 +20,8 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 使用 Minecraft 原生渲染系统的 MMD 模型渲染器
@@ -97,9 +99,10 @@ public class MMDModelNativeRender extends AbstractMMDModel {
         try {
             int vertexCount = (int) nf.GetVertexCount(model);
             
-            // 加载材质
+            // 加载材质并记录纹理引用
             int matCount = (int) nf.GetMaterialCount(model);
             MMDMaterial[] mats = new MMDMaterial[matCount];
+            List<String> texKeys = new ArrayList<>();
             for (int i = 0; i < matCount; i++) {
                 mats[i] = new MMDMaterial();
                 String texPath = nf.GetMaterialTex(model, i);
@@ -108,6 +111,8 @@ public class MMDModelNativeRender extends AbstractMMDModel {
                     if (tex != null) {
                         mats[i].tex = tex.tex;
                         mats[i].hasAlpha = tex.hasAlpha;
+                        MMDTextureManager.addRef(texPath);
+                        texKeys.add(texPath);
                     }
                 }
             }
@@ -145,6 +150,7 @@ public class MMDModelNativeRender extends AbstractMMDModel {
             result.mcVertexBuf = mcVertexBuf;
             result.poseMatBuf = poseMatBuf;
             result.normalMatBuf = normalMatBuf;
+            result.textureKeys = texKeys;
             subMeshDataBufLocal = MemoryUtil.memAlloc(subMeshCount * 20);
             subMeshDataBufLocal.order(ByteOrder.LITTLE_ENDIAN);
             result.subMeshDataBuf = subMeshDataBufLocal;
@@ -219,6 +225,7 @@ public class MMDModelNativeRender extends AbstractMMDModel {
     @Override
     public void dispose() {
         if (model == 0) return;
+        releaseTextures();
         if (mcVertexBuf != null) { MemoryUtil.memFree(mcVertexBuf); mcVertexBuf = null; }
         if (poseMatBuf != null) { MemoryUtil.memFree(poseMatBuf); poseMatBuf = null; }
         if (normalMatBuf != null) { MemoryUtil.memFree(normalMatBuf); normalMatBuf = null; }

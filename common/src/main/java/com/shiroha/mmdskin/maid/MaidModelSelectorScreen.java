@@ -127,9 +127,6 @@ public class MaidModelSelectorScreen extends Screen {
         // 发送网络包同步到服务器
         MaidModelNetworkHandler.sendMaidModelChange(maidEntityId, card.displayName);
         
-        // 触发模型切换事件，1分钟后清理未使用的缓存
-        com.shiroha.mmdskin.renderer.model.MMDModelManager.onModelSwitch();
-        
         logger.info("女仆 {} 选择模型: {}", maidName, card.displayName);
     }
 

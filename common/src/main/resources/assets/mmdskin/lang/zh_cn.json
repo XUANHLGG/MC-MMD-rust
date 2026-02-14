@@ -101,6 +101,9 @@
   "gui.mmdskin.stage.esc_hint": "再按一次 ESC 退出舞蹈",
   "gui.mmdskin.stage.mouse_released": "鼠标已释放 — 右键点击窗口恢复",
   
+  "gui.mmdskin.mod_settings.texture_cache_budget": "纹理缓存预算",
+  "gui.mmdskin.mod_settings.texture_cache_budget.tooltip": "纹理缓存 VRAM 软预算（MB）。仅约束已无模型引用的待释放纹理，不影响活跃纹理。降低可减少显存占用，升高可加快模型切换速度",
+  
   "gui.mmdskin.mod_settings.category.debug": "调试设置",
   "gui.mmdskin.mod_settings.debug_hud": "性能调试 HUD",
   "gui.mmdskin.mod_settings.debug_hud.tooltip": "在屏幕左上角显示模型的内存/显存占用信息"
