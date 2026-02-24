@@ -117,6 +117,8 @@ public class NativeFunc {
      */
     public native void SetLayerLoop(long model, long layer, boolean loop);
 
+    public native void SeekLayer(long model, long layer, float frame);
+
     public native void ResetModelPhysics(long model);
 
     public native long CreateMat();
@@ -697,6 +699,7 @@ public class NativeFunc {
         float maxLinearVelocity,
         float maxAngularVelocity,
         boolean jointsEnabled,
+        boolean kinematicFilter,
         boolean debugLog
     );
     

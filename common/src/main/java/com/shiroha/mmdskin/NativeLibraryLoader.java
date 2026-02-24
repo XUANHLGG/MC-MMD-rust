@@ -157,7 +157,6 @@ public final class NativeLibraryLoader {
         File extracted = extractNativeLibrary(resourcePath, fileName);
         if (extracted != null) {
             try {
-                logger.info("尝试加载内置库: " + extracted.getAbsolutePath() + " (" + extracted.length() + " bytes)");
                 System.load(extracted.getAbsolutePath());
                 return;
             } catch (Error e) {
@@ -169,7 +168,6 @@ public final class NativeLibraryLoader {
         File downloaded = downloadNativeLibrary(downloadFileName);
         if (downloaded != null) {
             try {
-                logger.info("尝试加载下载的库: " + downloaded.getAbsolutePath() + " (" + downloaded.length() + " bytes)");
                 System.load(downloaded.getAbsolutePath());
                 return;
             } catch (Error e) {
@@ -185,19 +183,12 @@ public final class NativeLibraryLoader {
 
     private static void loadAndroid() {
         logger.info("Android Env Detected! Arch: arm64");
-        logger.info("  os.name=" + System.getProperty("os.name") + " os.arch=" + System.getProperty("os.arch"));
-        logger.info("  FCL_NATIVEDIR=" + System.getenv("FCL_NATIVEDIR"));
-        logger.info("  POJAV_NATIVEDIR=" + System.getenv("POJAV_NATIVEDIR"));
-        logger.info("  MOD_ANDROID_RUNTIME=" + System.getenv("MOD_ANDROID_RUNTIME"));
-        logger.info("  LD_LIBRARY_PATH=" + System.getenv("LD_LIBRARY_PATH"));
-        logger.info("  gameDir=" + getGameDirectory());
 
         String resourcePath = "/natives/android-arm64/libmmd_engine.so";
         String soFileName = "libmmd_engine.so";
 
         // 策略0: 写入 $JAVA_HOME/lib
         var javaHome = System.getProperty("java.home");
-        logger.info("  JAVA_HOME=" + javaHome);
         var javaLibDir = new File(javaHome, "lib");
         var javaLibSoFile = new File(javaLibDir, soFileName);
         if (javaLibDir.canWrite()) {
@@ -206,23 +197,19 @@ public final class NativeLibraryLoader {
                     logger.warn("[Android] 策略0: 内置资源未找到: " + resourcePath);
                 } else {
                     Files.copy(is, javaLibSoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    logger.info("[Android] 已将 libmmd_engine.so 解压至 " + javaLibSoFile.getAbsolutePath());
                     System.load(javaLibSoFile.getAbsolutePath());
-                    logger.info("[Android] " + javaLibSoFile.getAbsolutePath() + " 已加载");
                     return;
                 }
             } catch (IOException | Error e) {
                 logger.error("[Android] " + javaLibSoFile.getAbsolutePath() + "加载失败：" + e.getMessage());
             }
         } else {
-            logger.warn("[Android] JAVA_HOME无法写入，跳过。");
+            logger.warn("[Android] JAVA_HOME 无法写入，跳过");
         }
 
         // 策略1: LD_LIBRARY_PATH
         try {
-            logger.info("[Android] 策略1: System.loadLibrary(\"mmd_engine\")");
             System.loadLibrary("mmd_engine");
-            logger.info("[Android] 策略1 成功！通过 LD_LIBRARY_PATH 加载");
             return;
         } catch (Error e) {
             logger.warn("[Android] 策略1 失败: " + e.getMessage());
@@ -239,9 +226,7 @@ public final class NativeLibraryLoader {
                 try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(resourcePath)) {
                     if (is != null) {
                         Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        logger.info("[Android] 策略2: 已提取到 " + targetFile.getAbsolutePath() + " (" + targetFile.length() + " bytes)");
                         System.load(targetFile.getAbsolutePath());
-                        logger.info("[Android] 策略2 成功！从 MOD_ANDROID_RUNTIME 加载");
                         return;
                     }
                 }
@@ -260,9 +245,7 @@ public final class NativeLibraryLoader {
                 try (InputStream is = NativeLibraryLoader.class.getResourceAsStream(resourcePath)) {
                     if (is != null) {
                         Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        logger.info("[Android] 策略3: 已提取到 " + targetFile.getAbsolutePath() + " (" + targetFile.length() + " bytes)");
                         System.load(targetFile.getAbsolutePath());
-                        logger.info("[Android] 策略3 成功！从 POJAV_NATIVEDIR 加载");
                         return;
                     }
                 }
@@ -275,9 +258,7 @@ public final class NativeLibraryLoader {
         File extracted = extractNativeLibrary(resourcePath, soFileName);
         if (extracted != null) {
             try {
-                logger.info("[Android] 策略4: 尝试从游戏目录加载 " + extracted.getAbsolutePath() + " (" + extracted.length() + " bytes)");
                 System.load(extracted.getAbsolutePath());
-                logger.info("[Android] 策略4 成功！从游戏目录加载");
                 return;
             } catch (Error e) {
                 logger.error("[Android] 策略4 失败 (游戏目录): " + e.getClass().getName() + ": " + e.getMessage());
@@ -288,9 +269,7 @@ public final class NativeLibraryLoader {
         File downloaded = downloadNativeLibrary("libmmd_engine-android-arm64.so");
         if (downloaded != null) {
             try {
-                logger.info("[Android] 策略5: 尝试加载下载的库 " + downloaded.getAbsolutePath());
                 System.load(downloaded.getAbsolutePath());
-                logger.info("[Android] 策略5 成功！从下载的文件加载");
                 return;
             } catch (Error e) {
                 logger.error("[Android] 策略5 失败 (下载): " + e.getClass().getName() + ": " + e.getMessage());
@@ -324,7 +303,6 @@ public final class NativeLibraryLoader {
             File targetFile = targetPath.toFile();
 
             if (targetFile.exists()) {
-                logger.info("原生库已存在，使用缓存: " + versionedName);
                 return targetFile;
             }
 
@@ -338,7 +316,6 @@ public final class NativeLibraryLoader {
                 Files.move(tempPath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             }
 
-            logger.info("已从模组内置资源释放原生库: " + versionedName);
             return targetFile;
         } catch (Exception e) {
             logger.error("提取原生库失败: " + resourcePath + " - " + e.getMessage());
@@ -353,12 +330,10 @@ public final class NativeLibraryLoader {
             Path targetPath = Paths.get(getGameDirectory(), versionedName);
 
             if (targetPath.toFile().exists()) {
-                logger.info("原生库已存在，使用已下载的缓存: " + versionedName);
                 return targetPath.toFile();
             }
 
             String urlStr = RELEASE_BASE_URL + versionedName;
-            logger.info("正在从 GitHub 下载原生库: " + urlStr);
 
             HttpURLConnection conn = null;
             for (int i = 0; i < 5; i++) {
@@ -386,8 +361,6 @@ public final class NativeLibraryLoader {
             }
 
             long contentLength = conn.getContentLengthLong();
-            logger.info("开始下载，文件大小: "
-                    + (contentLength > 0 ? (contentLength / 1024) + " KB" : "未知"));
 
             Path tempPath = Paths.get(getGameDirectory(), versionedName + ".download");
             try (InputStream is = conn.getInputStream()) {
@@ -396,7 +369,6 @@ public final class NativeLibraryLoader {
 
             Files.move(tempPath, targetPath, StandardCopyOption.REPLACE_EXISTING);
             conn.disconnect();
-            logger.info("原生库下载完成: " + versionedName);
             return targetPath.toFile();
         } catch (Exception e) {
             logger.error("下载原生库失败: " + downloadFileName + " - " + e.getMessage());
@@ -443,7 +415,6 @@ public final class NativeLibraryLoader {
                 if (shouldDelete) {
                     try {
                         if (f.delete()) {
-                            logger.info("已清理旧版本库文件: " + name);
                         }
                     } catch (Exception e) {
                         logger.debug("清理旧文件失败（可能仍被锁定）: " + name);
@@ -460,7 +431,6 @@ public final class NativeLibraryLoader {
         try {
             String rustVersion = instance.GetVersion();
             if (LIBRARY_VERSION.equals(rustVersion)) {
-                logger.info("原生库版本校验通过: " + rustVersion);
                 return;
             }
             logger.warn("原生库版本不匹配！Java 侧期望: " + LIBRARY_VERSION + ", Rust 侧实际: " + rustVersion);
