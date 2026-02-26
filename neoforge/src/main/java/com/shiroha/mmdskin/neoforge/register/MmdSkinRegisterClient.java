@@ -328,5 +328,13 @@ public class MmdSkinRegisterClient {
                 }
             }
         }
+
+        /**
+         * HUD 渲染事件 - 性能调试 HUD
+         */
+        @SubscribeEvent
+        public static void onRenderGui(net.neoforged.neoforge.client.event.RenderGuiEvent.Post event) {
+            com.shiroha.mmdskin.renderer.core.PerformanceHud.render(event.getGuiGraphics());
+        }
     }
 }
