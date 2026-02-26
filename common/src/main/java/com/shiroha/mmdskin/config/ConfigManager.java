@@ -166,12 +166,22 @@ public class ConfigManager {
     public static boolean isDebugHudEnabled() {
         return provider != null ? provider.isDebugHudEnabled() : false;
     }
+
+    // ==================== VR 联动配置 ====================
+    
+    public static boolean isVREnabled() {
+        return provider != null ? provider.isVREnabled() : true;
+    }
+    
+    public static float getVRArmIKStrength() {
+        return provider != null ? provider.getVRArmIKStrength() : 1.0f;
+    }
     
     /**
      * 配置提供者接口（组合接口）
-     * 继承 IRenderConfig / IToonConfig / IPhysicsConfig 三个子接口，
+     * 继承 IRenderConfig / IToonConfig / IPhysicsConfig / IVRConfig 四个子接口，
      * 各平台只需实现此接口即可覆盖全部配置项。
      */
-    public interface IConfigProvider extends IRenderConfig, IToonConfig, IPhysicsConfig {
+    public interface IConfigProvider extends IRenderConfig, IToonConfig, IPhysicsConfig, IVRConfig {
     }
 }

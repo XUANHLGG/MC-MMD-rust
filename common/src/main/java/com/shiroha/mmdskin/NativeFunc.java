@@ -37,6 +37,8 @@ public class NativeFunc {
 
     public native long LoadModelPMD(String filename, String dir, long layerCount);
 
+    public native long LoadModelVRM(String filename, String dir, long layerCount);
+
     public native void DeleteModel(long model);
 
     public native void UpdateModel(long model, float deltaTime);
@@ -751,4 +753,20 @@ public class NativeFunc {
      * 每个顶点 2 个 float (u, v)，共 vertexCount * 8 字节
      */
     public native int CopyRealtimeUVsToBuffer(long model, java.nio.ByteBuffer buffer);
+
+    // ==================== VR 联动相关 ====================
+    
+    /**
+     * 批量传递 VR 追踪数据（3 追踪点 × 7 float = 21 float）
+     * 布局：[head(7), mainHand(7), offHand(7)]，每组 [posX,posY,posZ, quatX,quatY,quatZ,quatW]
+     */
+    public native void SetVRTrackingData(long model, float[] trackingData);
+    
+    public native void SetVREnabled(long model, boolean enabled);
+    
+    /** 设置 VR IK 参数（armIKStrength: 0.0~1.0） */
+    public native void SetVRIKParams(long model, float armIKStrength);
+    
+    /** 设置 VR 手部渲染模式（0=全身, 1=仅左手, 2=仅右手） */
+    public native void SetVRHandMode(long model, int mode);
 }

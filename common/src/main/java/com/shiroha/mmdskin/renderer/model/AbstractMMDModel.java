@@ -45,6 +45,13 @@ public abstract class AbstractMMDModel implements IMMDModel {
     // 时间追踪
     protected long lastUpdateTime = -1;
 
+    // VR 模式标志（由 PlayerMixinDelegate 在渲染前设置）
+    private volatile boolean vrActive;
+
+    public void setVrActive(boolean active) { this.vrActive = active; }
+
+    public boolean isVrActive() { return vrActive; }
+
     // 预分配临时对象
     protected final Quaternionf tempQuat = new Quaternionf();
 
@@ -120,10 +127,10 @@ public abstract class AbstractMMDModel implements IMMDModel {
                                      int packedLight, RenderContext context) {
         boolean stagePlaying = MMDCameraController.getInstance().isStagePlayingModel(model);
 
-        // 头部角度（舞台播放时归零，由 VMD 动画控制）
+        // 头部角度（优先级：舞台播放 > VR 追踪 > 普通头部角度）
         if (stagePlaying) {
             getNf().SetHeadAngle(model, 0.0f, 0.0f, 0.0f, context.isWorldScene());
-        } else {
+        } else if (!vrActive) {
             float headAngleX = Mth.clamp(entityIn.getXRot(), -50.0f, 50.0f);
             float headAngleY = (entityYaw - Mth.lerp(tickDelta, entityIn.yHeadRotO, entityIn.yHeadRot)) % 360.0f;
             if (headAngleY < -180.0f) headAngleY += 360.0f;
@@ -137,8 +144,8 @@ public abstract class AbstractMMDModel implements IMMDModel {
             getNf().SetHeadAngle(model, pitchRad, yawRad, 0.0f, context.isWorldScene());
         }
 
-        // 眼球追踪
-        if (!stagePlaying) {
+        // 眼球追踪（VR 模式下跳过，由 VR 头部追踪替代）
+        if (!stagePlaying && !vrActive) {
             EyeTrackingHelper.updateEyeTracking(getNf(), model, entityIn, entityYaw, tickDelta, getModelName());
         }
 
