@@ -45,25 +45,10 @@ public class MmdSkinClient {
      * 确保所有必需的目录结构存在
      */
     private static void ensureEntityPlayerDirectory() {
-        File entityPlayerDir = PathConstants.getEntityPlayerDir();
-        if (PathConstants.ensureDirectoryExists(entityPlayerDir)) {
-            logger.info("创建 EntityPlayer 模型目录: " + entityPlayerDir.getAbsolutePath());
-        }
-        
-        File customAnimDir = PathConstants.getCustomAnimDir();
-        if (PathConstants.ensureDirectoryExists(customAnimDir)) {
-            logger.info("创建 CustomAnim 目录: " + customAnimDir.getAbsolutePath());
-        }
-        
-        File customMorphDir = PathConstants.getCustomMorphDir();
-        if (PathConstants.ensureDirectoryExists(customMorphDir)) {
-            logger.info("创建 CustomMorph 目录: " + customMorphDir.getAbsolutePath());
-        }
-        
-        File defaultMorphDir = PathConstants.getDefaultMorphDir();
-        if (PathConstants.ensureDirectoryExists(defaultMorphDir)) {
-            logger.info("创建 DefaultMorph 目录: " + defaultMorphDir.getAbsolutePath());
-        }
+        PathConstants.ensureDirectoryExists(PathConstants.getEntityPlayerDir());
+        PathConstants.ensureDirectoryExists(PathConstants.getCustomAnimDir());
+        PathConstants.ensureDirectoryExists(PathConstants.getCustomMorphDir());
+        PathConstants.ensureDirectoryExists(PathConstants.getDefaultMorphDir());
     }
     
     /** 内置默认动画文件列表 */
@@ -85,22 +70,18 @@ public class MmdSkinClient {
         // 如果目录不存在或为空，则提取内置动画
         String[] files = defaultAnimDir.list();
         if (!defaultAnimDir.exists() || files == null || files.length == 0) {
-            logger.info("DefaultAnim 目录缺失，从模组内置资源提取...");
             PathConstants.ensureDirectoryExists(defaultAnimDir);
             
-            int extracted = 0;
             for (String fileName : DEFAULT_ANIM_FILES) {
                 try (InputStream is = MmdSkinClient.class.getResourceAsStream("/assets/mmdskin/default_anim/" + fileName)) {
                     if (is != null) {
                         File targetFile = new File(defaultAnimDir, fileName);
                         Files.copy(is, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        extracted++;
                     }
                 } catch (IOException e) {
                     logger.warn("提取动画文件失败: " + fileName, e);
                 }
             }
-            logger.info("已从模组内置资源提取 " + extracted + " 个默认动画文件");
         }
     }
 
@@ -125,13 +106,11 @@ public class MmdSkinClient {
         try (FileInputStream fis = new FileInputStream(filename);
              ZipInputStream zis = new ZipInputStream(new BufferedInputStream(fis))) {
             while ((entry = zis.getNextEntry()) != null) {
-                logger.info("解压: " + entry);
                 int count;
                 byte data[] = new byte[BUFFER];
                 String name = validateFilename(targetDir+entry.getName(), targetDir);
                 File targetFile = new File(name);
                 if (entry.isDirectory()) {
-                    logger.info("创建目录 " + name);
                     new File(name).mkdir();
                     continue;
                 }
@@ -161,7 +140,6 @@ public class MmdSkinClient {
     private static void check3DSkinFolder(){
         File skin3DFolder = PathConstants.getSkinRootDir();
         if (!skin3DFolder.exists()){
-            logger.info("3d-skin 目录不存在，尝试从 GitHub 下载");
             skin3DFolder.mkdir();
             String gameDir = PathConstants.getGameDirectory();
             File zipFile = new File(gameDir, PathConstants.RESOURCE_ZIP_NAME);
@@ -209,7 +187,6 @@ public class MmdSkinClient {
             float z = Float.parseFloat(splittedStr[2]);
             return new Vector3f(x, y, z);
         } catch (NumberFormatException e) {
-            logger.warn("向量解析失败: {}", arg);
             return new Vector3f(0.0f);
         }
     }

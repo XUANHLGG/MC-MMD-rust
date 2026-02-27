@@ -29,10 +29,8 @@ public final class VRDetector {
     private static boolean detect() {
         try {
             Class.forName(VR_API_CLASS);
-            logger.info("mc-vr-api 已检测到，VR 联动功能可用");
             return true;
         } catch (ClassNotFoundException e) {
-            logger.info("mc-vr-api 未安装，VR 联动功能已禁用");
             return false;
         }
     }
