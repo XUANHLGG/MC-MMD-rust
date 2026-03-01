@@ -43,24 +43,11 @@ public class MmdSkinNeoForgeClient {
     
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
-        MmdSkinClient.logger.info("MMD Skin NeoForge 客户端初始化开始...");
-        
-        // 初始化配置系统
         MmdSkinConfig.init();
-        
-        // 初始化客户端
         MmdSkinClient.initClient();
-        
-        // 注册客户端内容
         MmdSkinRegisterClient.Register();
-        
-        // 配置 MMD Shader
         MMDModelOpenGL.isMMDShaderEnabled = com.shiroha.mmdskin.config.ConfigManager.isMMDShaderEnabled();
-        
-        // 注册女仆渲染事件处理器（TouhouLittleMaid 联动）
         NeoForge.EVENT_BUS.register(new MaidRenderEventHandler());
         NeoForge.EVENT_BUS.register(MaidSyncEventHandler.class);
-        
-        MmdSkinClient.logger.info("MMD Skin NeoForge 客户端初始化成功");
     }
 }

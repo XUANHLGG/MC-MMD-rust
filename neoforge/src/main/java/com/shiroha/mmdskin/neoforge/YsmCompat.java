@@ -1,7 +1,8 @@
 package com.shiroha.mmdskin.neoforge;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.fml.ModList;
@@ -12,6 +13,7 @@ import net.neoforged.neoforge.attachment.AttachmentType;
  * 通过反射访问 YSM 的数据和配置，用于在第一人称模式下协调渲染
  */
 public class YsmCompat {
+   private static final Logger logger = LogManager.getLogger();
    private static boolean ysmChecked = false;
    private static boolean ysmPresent = false;
    private static AttachmentType<?> ysmAttachmentType = null;
@@ -62,7 +64,7 @@ public class YsmCompat {
                   booleanValueGetMethod = disableSelfModelValue.getClass().getMethod("get");
                }
             } catch (Exception e) {
-               System.err.println("[MMDSkin] Failed to initialize YSM compatibility: " + e.getMessage());
+               logger.error("YSM NeoForge 兼容初始化失败: {}", e.getMessage());
                ysmPresent = false;
             }
          }

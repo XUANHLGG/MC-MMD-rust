@@ -5,9 +5,11 @@ import java.util.UUID;
 import com.shiroha.mmdskin.MmdSkin;
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
 import com.shiroha.mmdskin.neoforge.register.MmdSkinAttachments;
+import com.shiroha.mmdskin.renderer.animation.PendingAnimSignalCache;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.renderer.render.MorphSyncHelper;
 import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
+import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
@@ -20,46 +22,50 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
- * NeoForge 网络包处理
- * 使用 NeoForge 1.21.1 的 Payload 系统
- * 支持动作同步和物理重置
+ * NeoForge 网络包处理（Payload + 服务端/客户端逻辑）
  */
-public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int arg0) implements CustomPacketPayload {
-    
+public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int arg0, byte[] binaryData) implements CustomPacketPayload {
+    private static final Logger logger = LogManager.getLogger();
+
     public static final Type<MmdSkinNetworkPack> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MmdSkin.MOD_ID, "network_pack"));
-    
+
     public static final StreamCodec<FriendlyByteBuf, MmdSkinNetworkPack> STREAM_CODEC = StreamCodec.of(
         MmdSkinNetworkPack::encode,
         MmdSkinNetworkPack::decode
     );
-    
-    // 工厂方法（字符串参数）
+
     public static MmdSkinNetworkPack withAnimId(int opCode, UUID playerUUID, String animId) {
-        return new MmdSkinNetworkPack(opCode, playerUUID, animId, 0);
+        return new MmdSkinNetworkPack(opCode, playerUUID, animId, 0, new byte[0]);
     }
-    
-    // 工厂方法（整数参数）
+
     public static MmdSkinNetworkPack withArg(int opCode, UUID playerUUID, int arg0) {
-        return new MmdSkinNetworkPack(opCode, playerUUID, "", arg0);
+        return new MmdSkinNetworkPack(opCode, playerUUID, "", arg0, new byte[0]);
     }
-    
-    // 工厂方法（女仆模型变更）
+
     public static MmdSkinNetworkPack forMaid(int opCode, UUID playerUUID, int entityId, String modelName) {
-        return new MmdSkinNetworkPack(opCode, playerUUID, modelName, entityId);
+        return new MmdSkinNetworkPack(opCode, playerUUID, modelName, entityId, new byte[0]);
     }
-    
+
+    public static MmdSkinNetworkPack withBinary(int opCode, UUID playerUUID, byte[] data) {
+        return new MmdSkinNetworkPack(opCode, playerUUID, "", 0, data);
+    }
+
     private static void encode(FriendlyByteBuf buffer, MmdSkinNetworkPack pack) {
         buffer.writeInt(pack.opCode);
         buffer.writeUUID(pack.playerUUID);
-        if (pack.opCode == 1 || pack.opCode == 3 || pack.opCode == 6 || pack.opCode == 7 || pack.opCode == 8 || pack.opCode == 9) {
+        if (NetworkOpCode.isStringPayload(pack.opCode)) {
             buffer.writeUtf(pack.animId);
-        } else if (pack.opCode == 4 || pack.opCode == 5) {
+        } else if (NetworkOpCode.isEntityStringPayload(pack.opCode)) {
             buffer.writeInt(pack.arg0);
             buffer.writeUtf(pack.animId);
         } else {
             buffer.writeInt(pack.arg0);
         }
+        buffer.writeByteArray(pack.binaryData);
     }
 
     private static MmdSkinNetworkPack decode(FriendlyByteBuf buffer) {
@@ -68,112 +74,126 @@ public record MmdSkinNetworkPack(int opCode, UUID playerUUID, String animId, int
         String animId = "";
         int arg0 = 0;
 
-        if (opCode == 1 || opCode == 3 || opCode == 6 || opCode == 7 || opCode == 8 || opCode == 9) {
+        if (NetworkOpCode.isStringPayload(opCode)) {
             animId = buffer.readUtf();
-        } else if (opCode == 4 || opCode == 5) {
+        } else if (NetworkOpCode.isEntityStringPayload(opCode)) {
             arg0 = buffer.readInt();
             animId = buffer.readUtf();
         } else {
             arg0 = buffer.readInt();
         }
-        return new MmdSkinNetworkPack(opCode, playerUUID, animId, arg0);
+        byte[] binaryData = buffer.readByteArray();
+        return new MmdSkinNetworkPack(opCode, playerUUID, animId, arg0, binaryData);
     }
-    
+
     @Override
     public Type<? extends CustomPacketPayload> type() {
         return TYPE;
     }
-    
+
     public static void handle(MmdSkinNetworkPack pack, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
             if (ctx.player() instanceof ServerPlayer sender) {
-                // opCode 10: 客户端请求所有玩家的模型同步
-                if (pack.opCode == 10) {
-                    for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
-                        String modelName = player.getData(MmdSkinAttachments.PLAYER_MMD_MODEL.get());
-                        if (modelName != null && !modelName.isEmpty()) {
-                            PacketDistributor.sendToPlayer(sender, MmdSkinNetworkPack.withAnimId(3, player.getUUID(), modelName));
-                        }
-                    }
-                    return;
-                }
-
-                if (pack.opCode == 4) {
-                    Entity entity = sender.level().getEntity(pack.arg0);
-                    if (entity != null) {
-                        entity.setData(MmdSkinAttachments.MAID_MMD_MODEL.get(), pack.animId);
-                    }
-                }
-
-                // opCode 3: 模型变更，存入附件系统
-                if (pack.opCode == 3) {
-                    sender.setData(MmdSkinAttachments.PLAYER_MMD_MODEL.get(), pack.animId);
-                }
-
-                // 服务器端（含局域网）：转发给所有客户端（包括发送者，以便同步状态）
-                for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
-                    PacketDistributor.sendToPlayer(player, pack);
-                }
+                handleServer(pack, sender);
             } else {
-                // 客户端：处理收到的包
                 pack.handleClient();
             }
         });
     }
-    
+
+    private static void handleServer(MmdSkinNetworkPack pack, ServerPlayer sender) {
+        // UUID 鉴权
+        UUID realUUID = sender.getUUID();
+        if (!realUUID.equals(pack.playerUUID)) {
+            logger.warn("UUID 不匹配，丢弃数据包: claimed={}, real={}", pack.playerUUID, realUUID);
+            return;
+        }
+
+        // REQUEST_ALL_MODELS：回传所有已注册模型给请求者
+        if (pack.opCode == NetworkOpCode.REQUEST_ALL_MODELS) {
+            for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
+                String modelName = player.getData(MmdSkinAttachments.PLAYER_MMD_MODEL.get());
+                if (modelName != null && !modelName.isEmpty()) {
+                    PacketDistributor.sendToPlayer(sender,
+                            MmdSkinNetworkPack.withAnimId(NetworkOpCode.MODEL_SELECT, player.getUUID(), modelName));
+                }
+            }
+            return;
+        }
+
+        // 女仆模型绑定存入附件
+        if (pack.opCode == NetworkOpCode.MAID_MODEL) {
+            Entity entity = sender.level().getEntity(pack.arg0);
+            if (entity != null) {
+                entity.setData(MmdSkinAttachments.MAID_MMD_MODEL.get(), pack.animId);
+            }
+        }
+
+        // 模型选择存入附件
+        if (pack.opCode == NetworkOpCode.MODEL_SELECT) {
+            sender.setData(MmdSkinAttachments.PLAYER_MMD_MODEL.get(), pack.animId);
+        }
+
+        // 用真实 UUID 重建后转发
+        MmdSkinNetworkPack corrected = new MmdSkinNetworkPack(
+                pack.opCode, realUUID, pack.animId, pack.arg0, pack.binaryData);
+        for (ServerPlayer player : sender.getServer().getPlayerList().getPlayers()) {
+            if (!player.equals(sender)) {
+                PacketDistributor.sendToPlayer(player, corrected);
+            }
+        }
+    }
+
     private void handleClient() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null) {
-            if (this.opCode == 4 || this.opCode == 5 || !this.playerUUID.equals(mc.player.getUUID())) {
-                if (mc.level != null) {
-                    Player target = mc.level.getPlayerByUUID(this.playerUUID);
-                    switch (this.opCode) {
-                        case 1:
-                            if (target != null) {
-                                MmdSkinRendererPlayerHelper.CustomAnim(target, this.animId);
-                            }
-                            break;
-                        case 2:
-                            if (target != null) {
-                                MmdSkinRendererPlayerHelper.ResetPhysics(target);
-                            }
-                            break;
-                        case 3:
-                            PlayerModelSyncManager.onRemotePlayerModelReceived(this.playerUUID, this.animId);
-                            break;
-                        case 4:
-                            Entity maidEntityx = mc.level.getEntity(this.arg0);
-                            if (maidEntityx != null) {
-                                MaidMMDModelManager.bindModel(maidEntityx.getUUID(), this.animId);
-                            }
-                            break;
-                        case 5:
-                            Entity maidEntity = mc.level.getEntity(this.arg0);
-                            if (maidEntity != null) {
-                                MaidMMDModelManager.playAnimation(maidEntity.getUUID(), this.animId);
-                            }
-                            break;
-                        case 6:
-                            if (target != null) {
-                                MorphSyncHelper.applyRemoteMorph(target, this.animId);
-                            }
-                            break;
-                        case 7:
-                            if (target != null) {
-                                StageAnimSyncHelper.startStageAnim(target, this.animId);
-                            }
-                            break;
-                        case 8:
-                            if (target != null) {
-                                StageAnimSyncHelper.endStageAnim(target);
-                            }
-                            break;
-                        case 9:
-                            if (target != null) {
-                                MmdSkinRendererPlayerHelper.StageAudioPlay(target, this.animId);
-                            }
-                            break;
+        if (mc.player == null || mc.level == null) return;
+        if (this.playerUUID.equals(mc.player.getUUID())) return;
+
+        Player target = mc.level.getPlayerByUUID(this.playerUUID);
+
+        if (NetworkOpCode.isEntityStringPayload(this.opCode)) {
+            Entity maidEntity = mc.level.getEntity(this.arg0);
+            if (maidEntity == null) return;
+            switch (this.opCode) {
+                case NetworkOpCode.MAID_MODEL -> MaidMMDModelManager.bindModel(maidEntity.getUUID(), this.animId);
+                case NetworkOpCode.MAID_ACTION -> MaidMMDModelManager.playAnimation(maidEntity.getUUID(), this.animId);
+                default -> {}
+            }
+        } else if (NetworkOpCode.isStringPayload(this.opCode)) {
+            switch (this.opCode) {
+                case NetworkOpCode.CUSTOM_ANIM -> {
+                    if (target != null) MmdSkinRendererPlayerHelper.CustomAnim(target, this.animId);
+                }
+                case NetworkOpCode.MODEL_SELECT -> {
+                    PlayerModelSyncManager.onRemotePlayerModelReceived(this.playerUUID, this.animId);
+                }
+                case NetworkOpCode.MORPH_SYNC -> {
+                    if (target != null) MorphSyncHelper.applyRemoteMorph(target, this.animId);
+                }
+                case NetworkOpCode.STAGE_START -> {
+                    if (target != null) StageAnimSyncHelper.startStageAnim(target, this.animId);
+                }
+                case NetworkOpCode.STAGE_END -> {
+                    if (target != null) {
+                        StageAnimSyncHelper.endStageAnim(target);
+                    } else {
+                        PendingAnimSignalCache.put(this.playerUUID, PendingAnimSignalCache.SignalType.STAGE_END);
                     }
+                }
+                case NetworkOpCode.STAGE_AUDIO -> {
+                    if (target != null) MmdSkinRendererPlayerHelper.StageAudioPlay(target, this.animId);
+                }
+                case NetworkOpCode.STAGE_MULTI -> {
+                    com.shiroha.mmdskin.ui.network.StageMultiHandler.handle(this.playerUUID, this.animId);
+                }
+                default -> {}
+            }
+        } else {
+            if (this.opCode == NetworkOpCode.RESET_PHYSICS) {
+                if (target != null) {
+                    MmdSkinRendererPlayerHelper.ResetPhysics(target);
+                } else {
+                    PendingAnimSignalCache.put(this.playerUUID, PendingAnimSignalCache.SignalType.RESET);
                 }
             }
         }

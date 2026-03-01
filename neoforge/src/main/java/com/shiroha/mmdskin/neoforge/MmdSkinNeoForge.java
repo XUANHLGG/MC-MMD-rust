@@ -22,8 +22,6 @@ public class MmdSkinNeoForge {
     }
 
     public void preInit(FMLCommonSetupEvent event) {
-        logger.info("MMD Skin 预初始化开始...");
         MmdSkinRegisterCommon.Register();
-        logger.info("MMD Skin 预初始化成功");
     }
 }
