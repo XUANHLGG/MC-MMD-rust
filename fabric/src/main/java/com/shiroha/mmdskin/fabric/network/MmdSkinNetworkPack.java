@@ -3,9 +3,11 @@ package com.shiroha.mmdskin.fabric.network;
 import java.util.UUID;
 
 import com.shiroha.mmdskin.maid.MaidMMDModelManager;
+import com.shiroha.mmdskin.renderer.animation.PendingAnimSignalCache;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.renderer.render.MorphSyncHelper;
 import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
+import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -14,112 +16,102 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
 /**
- * Fabric 网络包处理
- * MC 1.21.1: 使用新的 Payload API
+ * Fabric 网络包发送与客户端处理
  */
 public class MmdSkinNetworkPack {
-    /**
-     * 发送到服务器（整数参数版本）
-     */
+
     public static void sendToServer(int opCode, UUID playerUUID, int arg0) {
         ClientPlayNetworking.send(MmdSkinPayload.createInt(opCode, playerUUID, arg0));
     }
-    
-    /**
-     * 发送到服务器（字符串参数版本）
-     */
+
     public static void sendToServer(int opCode, UUID playerUUID, String animId) {
         ClientPlayNetworking.send(MmdSkinPayload.createString(opCode, playerUUID, animId));
     }
-    
-    /**
-     * 发送到服务器（entityId + 字符串参数版本）
-     */
+
     public static void sendToServer(int opCode, UUID playerUUID, int entityId, String data) {
         ClientPlayNetworking.send(MmdSkinPayload.createMaid(opCode, playerUUID, entityId, data));
     }
-    
-    /**
-     * 客户端处理 Payload
-     */
+
+    public static void sendBinaryToServer(int opCode, UUID playerUUID, byte[] data) {
+        ClientPlayNetworking.send(MmdSkinPayload.createBinary(opCode, playerUUID, data));
+    }
+
     public static void handlePayload(MmdSkinPayload payload) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
-        if (payload.playerUUID().equals(mc.player.getUUID())) return;
-        
+        if (mc.player == null || payload.playerUUID().equals(mc.player.getUUID())) return;
+
         int opCode = payload.opCode();
         UUID playerUUID = payload.playerUUID();
-        
+
+        if (NetworkOpCode.isEntityStringPayload(opCode)) {
+            handleMaid(opCode, playerUUID, payload.entityId(), payload.stringArg());
+        } else if (NetworkOpCode.isStringPayload(opCode)) {
+            handleString(opCode, playerUUID, payload.stringArg());
+        } else {
+            handleInt(opCode, playerUUID, payload.intArg());
+        }
+    }
+
+    private static void handleInt(int opCode, UUID playerUUID, int arg0) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+
+        if (opCode == NetworkOpCode.RESET_PHYSICS) {
+            Player target = mc.level.getPlayerByUUID(playerUUID);
+            if (target != null) {
+                MmdSkinRendererPlayerHelper.ResetPhysics(target);
+            } else {
+                PendingAnimSignalCache.put(playerUUID, PendingAnimSignalCache.SignalType.RESET);
+            }
+        }
+    }
+
+    private static void handleString(int opCode, UUID playerUUID, String data) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+
+        Player target = mc.level.getPlayerByUUID(playerUUID);
         switch (opCode) {
-            case 1: {
-                // 执行动画
-                if (mc.level == null) return;
-                Player target = mc.level.getPlayerByUUID(playerUUID);
-                if (target != null)
-                    MmdSkinRendererPlayerHelper.CustomAnim(target, payload.stringArg());
-                break;
+            case NetworkOpCode.CUSTOM_ANIM -> {
+                if (target != null) MmdSkinRendererPlayerHelper.CustomAnim(target, data);
             }
-            case 2: {
-                // 重置物理
-                if (mc.level == null) return;
-                Player target = mc.level.getPlayerByUUID(playerUUID);
-                if (target != null)
-                    MmdSkinRendererPlayerHelper.ResetPhysics(target);
-                break;
+            case NetworkOpCode.MODEL_SELECT -> {
+                PlayerModelSyncManager.onRemotePlayerModelReceived(playerUUID, data);
             }
-            case 3: {
-                // 模型选择同步
-                PlayerModelSyncManager.onRemotePlayerModelReceived(playerUUID, payload.stringArg());
-                break;
+            case NetworkOpCode.MORPH_SYNC -> {
+                if (target != null) MorphSyncHelper.applyRemoteMorph(target, data);
             }
-            case 4: {
-                // 女仆模型变更
-                if (mc.level == null) return;
-                Entity maidEntity = mc.level.getEntity(payload.entityId());
-                if (maidEntity != null)
-                    MaidMMDModelManager.bindModel(maidEntity.getUUID(), payload.stringArg());
-                break;
+            case NetworkOpCode.STAGE_START -> {
+                if (target != null) StageAnimSyncHelper.startStageAnim(target, data);
             }
-            case 5: {
-                // 女仆动作变更
-                if (mc.level == null) return;
-                Entity maidEntity = mc.level.getEntity(payload.entityId());
-                if (maidEntity != null)
-                    MaidMMDModelManager.playAnimation(maidEntity.getUUID(), payload.stringArg());
-                break;
-            }
-            case 6: {
-                // 表情同步（远程玩家）
-                if (mc.level == null) return;
-                Player target = mc.level.getPlayerByUUID(playerUUID);
-                if (target != null)
-                    MorphSyncHelper.applyRemoteMorph(target, payload.stringArg());
-                break;
-            }
-            case 7: {
-                // 舞台动画开始（远程玩家）
-                if (mc.level == null) return;
-                Player target = mc.level.getPlayerByUUID(playerUUID);
-                if (target != null)
-                    StageAnimSyncHelper.startStageAnim(target, payload.stringArg());
-                break;
-            }
-            case 8: {
-                // 舞台动画结束（远程玩家）
-                if (mc.level == null) return;
-                Player target = mc.level.getPlayerByUUID(playerUUID);
-                if (target != null)
+            case NetworkOpCode.STAGE_END -> {
+                if (target != null) {
                     StageAnimSyncHelper.endStageAnim(target);
-                break;
+                } else {
+                    PendingAnimSignalCache.put(playerUUID, PendingAnimSignalCache.SignalType.STAGE_END);
+                }
             }
-            case 9: {
-                // 远程玩家舞台音频
-                if (mc.level == null) return;
-                Player target = mc.level.getPlayerByUUID(playerUUID);
-                if (target != null)
-                    MmdSkinRendererPlayerHelper.StageAudioPlay(target, payload.stringArg());
-                break;
+            case NetworkOpCode.STAGE_AUDIO -> {
+                if (target != null) MmdSkinRendererPlayerHelper.StageAudioPlay(target, data);
             }
+            case NetworkOpCode.STAGE_MULTI -> {
+                com.shiroha.mmdskin.ui.network.StageMultiHandler.handle(playerUUID, data);
+            }
+            default -> {}
+        }
+    }
+
+    private static void handleMaid(int opCode, UUID playerUUID, int entityId, String data) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+
+        Entity maidEntity = mc.level.getEntity(entityId);
+        if (maidEntity == null) return;
+
+        switch (opCode) {
+            case NetworkOpCode.MAID_MODEL -> MaidMMDModelManager.bindModel(maidEntity.getUUID(), data);
+            case NetworkOpCode.MAID_ACTION -> MaidMMDModelManager.playAnimation(maidEntity.getUUID(), data);
+            default -> {}
         }
     }
 }

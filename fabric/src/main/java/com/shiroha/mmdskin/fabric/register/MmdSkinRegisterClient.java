@@ -1,24 +1,27 @@
 package com.shiroha.mmdskin.fabric.register;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.shiroha.mmdskin.bonesync.BoneSyncManager;
+import com.shiroha.mmdskin.bonesync.BoneSyncNetworkHandler;
 import com.shiroha.mmdskin.fabric.config.ModConfigScreen;
 import com.shiroha.mmdskin.mixin.fabric.KeyMappingAccessor;
 import com.shiroha.mmdskin.fabric.maid.MaidCompatMixinPlugin;
 import com.shiroha.mmdskin.fabric.network.MmdSkinNetworkPack;
 import com.shiroha.mmdskin.maid.MaidActionNetworkHandler;
 import com.shiroha.mmdskin.maid.MaidModelNetworkHandler;
+import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import com.shiroha.mmdskin.renderer.render.MmdSkinRenderFactory;
+import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.ui.network.ActionWheelNetworkHandler;
-import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
-import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
-import com.shiroha.mmdskin.ui.QuickModelSwitcher;
 import com.shiroha.mmdskin.ui.network.MorphWheelNetworkHandler;
+import com.shiroha.mmdskin.ui.network.NetworkOpCode;
 import com.shiroha.mmdskin.ui.network.PlayerModelSyncManager;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
 import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.camera.StageAudioPlayer;
-import com.shiroha.mmdskin.renderer.model.MMDModelManager;
-import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
+import com.shiroha.mmdskin.ui.QuickModelSwitcher;
+import com.shiroha.mmdskin.ui.wheel.ConfigWheelScreen;
+import com.shiroha.mmdskin.ui.wheel.MaidConfigWheelScreen;
 import com.shiroha.mmdskin.util.KeyMappingUtil;
 
 import java.io.File;
@@ -72,10 +75,13 @@ public class MmdSkinRegisterClient {
     public static void Register() {
         Minecraft MCinstance = Minecraft.getInstance();
         
-        // 注入 Fabric 平台的按键获取逻辑
-        KeyMappingUtil.setBoundKeyGetter(k -> ((KeyMappingAccessor) k).mmd$getBoundKey());
+        KeyMappingUtil.setBoundKeyGetter(k -> {
+            if (k instanceof KeyMappingAccessor accessor) {
+                return accessor.mmd$getBoundKey();
+            }
+            return InputConstants.UNKNOWN;
+        });
         
-        // 注册按键
         KeyBindingHelper.registerKeyBinding(keyConfigWheel);
         if (MaidCompatMixinPlugin.isMaidModLoaded()) {
             KeyBindingHelper.registerKeyBinding(keyMaidConfigWheel);
@@ -84,80 +90,100 @@ public class MmdSkinRegisterClient {
             KeyBindingHelper.registerKeyBinding(keyQuickModel);
         }
         
-        // 设置模组设置界面工厂
         ConfigWheelScreen.setModSettingsScreenFactory(() -> ModConfigScreen.create(null));
         
-        // 注册动作轮盘网络发送器
         ActionWheelNetworkHandler.setNetworkSender(animId -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                // 使用字符串传输动画ID，支持中文文件名
-                logger.info("发送动作到服务器: " + animId);
-                MmdSkinNetworkPack.sendToServer(1, player.getUUID(), animId);
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.CUSTOM_ANIM, player.getUUID(), animId);
             }
         });
         
-        // 注册表情轮盘网络发送器
+        ActionWheelNetworkHandler.setAnimStopSender(() -> {
+            LocalPlayer player = MCinstance.player;
+            if (player != null) {
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.RESET_PHYSICS, player.getUUID(), 0);
+            }
+        });
+        
         MorphWheelNetworkHandler.setNetworkSender(morphName -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                logger.info("发送表情到服务器: " + morphName);
-                // 使用 opCode 6 表示表情变更
-                MmdSkinNetworkPack.sendToServer(6, player.getUUID(), morphName);
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.MORPH_SYNC, player.getUUID(), morphName);
             }
         });
         
-        // 注册模型选择网络发送器（旧接口，保留向后兼容）
         com.shiroha.mmdskin.ui.network.ModelSelectorNetworkHandler.setNetworkSender(modelName -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                // 使用 opCode 3 表示模型变更（字符串参数）
-                MmdSkinNetworkPack.sendToServer(3, player.getUUID(), modelName);
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.MODEL_SELECT, player.getUUID(), modelName);
             }
         });
         
-        // 注册模型同步管理器的网络广播器（新接口，用于联机同步）
         PlayerModelSyncManager.setNetworkBroadcaster((playerUUID, modelName) -> {
-            // 使用 opCode 3 发送模型选择到服务器
-            MmdSkinNetworkPack.sendToServer(3, playerUUID, modelName);
+            MmdSkinNetworkPack.sendToServer(NetworkOpCode.MODEL_SELECT, playerUUID, modelName);
         });
         
-        // 注册女仆模型选择网络发送器
         MaidModelNetworkHandler.setNetworkSender((entityId, modelName) -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                MmdSkinNetworkPack.sendToServer(4, player.getUUID(), entityId, modelName);
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.MAID_MODEL, player.getUUID(), entityId, modelName);
             }
         });
         
-        // 注册女仆动作网络发送器
         MaidActionNetworkHandler.setNetworkSender((entityId, animId) -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                logger.info("发送女仆动作到服务器: 实体={}, 动画={}", entityId, animId);
-                MmdSkinNetworkPack.sendToServer(5, player.getUUID(), entityId, animId);
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.MAID_ACTION, player.getUUID(), entityId, animId);
             }
         });
         
-        // 注册舞台网络发送器
         StageNetworkHandler.setStageStartSender(stageData -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                MmdSkinNetworkPack.sendToServer(7, player.getUUID(), stageData);
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.STAGE_START, player.getUUID(), stageData);
             }
         });
         StageNetworkHandler.setStageEndSender(() -> {
             LocalPlayer player = MCinstance.player;
             if (player != null) {
-                MmdSkinNetworkPack.sendToServer(8, player.getUUID(), "");
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.STAGE_END, player.getUUID(), "");
             }
         });
         
-        // 主配置轮盘按键事件（按住打开，松开选择）
+        StageNetworkHandler.setStageMultiSender(data -> {
+            LocalPlayer player = MCinstance.player;
+            if (player != null) {
+                MmdSkinNetworkPack.sendToServer(NetworkOpCode.STAGE_MULTI, player.getUUID(), data);
+            }
+        });
+        
+        BoneSyncNetworkHandler.setNetworkSender(boneData -> {
+            LocalPlayer player = MCinstance.player;
+            if (player != null) {
+                MmdSkinNetworkPack.sendBinaryToServer(NetworkOpCode.BONE_SYNC, player.getUUID(), boneData);
+            }
+        });
+        
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (MCinstance.player == null) return;
+
+            MMDModelManager.tick();
+
+            StageAudioPlayer.tickRemoteAttenuation();
             
-            // 主配置轮盘按键处理
+            BoneSyncManager.tickLocal();
+            
+            // 舞台模式死亡/复活检测
+            if (MCinstance.player != null) {
+                if (!MCinstance.player.isAlive()) {
+                    MMDCameraController controller = MMDCameraController.getInstance();
+                    if (controller.isInStageMode()) {
+                        controller.exitStageMode();
+                    }
+                }
+            }
+
             if (MCinstance.screen == null || MCinstance.screen instanceof ConfigWheelScreen) {
                 boolean keyDown = keyConfigWheel.isDown();
                 if (keyDown && !configWheelKeyWasDown) {
@@ -168,7 +194,14 @@ public class MmdSkinRegisterClient {
                 configWheelKeyWasDown = false;
             }
             
-            // 女仆配置轮盘按键处理
+            if (MCinstance.screen == null) {
+                for (int i = 0; i < keyQuickModels.length; i++) {
+                    while (keyQuickModels[i].consumeClick()) {
+                        QuickModelSwitcher.switchToSlot(i);
+                    }
+                }
+            }
+            
             if (MaidCompatMixinPlugin.isMaidModLoaded()) {
                 if (MCinstance.screen == null || MCinstance.screen instanceof MaidConfigWheelScreen) {
                     boolean keyDown = keyMaidConfigWheel.isDown();
@@ -178,37 +211,6 @@ public class MmdSkinRegisterClient {
                     maidConfigWheelKeyWasDown = keyDown;
                 } else {
                     maidConfigWheelKeyWasDown = false;
-                }
-            }
-
-            // 快捷模型切换
-            if (MCinstance.screen == null) {
-                for (int i = 0; i < keyQuickModels.length; i++) {
-                    while (keyQuickModels[i].consumeClick()) {
-                        QuickModelSwitcher.switchToSlot(i);
-                    }
-                }
-            }
-
-        });
-
-        // 远程舞台音频距离衰减（每秒更新一次）
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (MCinstance.player == null) return;
-
-            // 模型/纹理缓存 GC
-            MMDModelManager.tick();
-
-            StageAudioPlayer.tickRemoteAttenuation();
-
-            // 舞台模式死亡/复活检测
-            if (MCinstance.player != null) {
-                if (!MCinstance.player.isAlive()) {
-                    MMDCameraController controller = MMDCameraController.getInstance();
-                    if (controller.isInStageMode()) {
-                        logger.info("检测到玩家死亡，正在退出舞台模式以防止视角锁定");
-                        controller.exitStageMode();
-                    }
                 }
             }
         });
@@ -247,23 +249,20 @@ public class MmdSkinRegisterClient {
                         .getPlayerModel(player.getName().getString());
                     if (selectedModel != null && !selectedModel.isEmpty() && 
                         !selectedModel.equals(com.shiroha.mmdskin.config.UIConstants.DEFAULT_MODEL_NAME)) {
-                        logger.info("玩家加入服务器，广播模型选择: {}", selectedModel);
                         PlayerModelSyncManager.broadcastLocalModelSelection(player.getUUID(), selectedModel);
                     }
-                    // 请求所有玩家的模型信息
-                    MmdSkinNetworkPack.sendToServer(10, player.getUUID(), "");
+                    MmdSkinNetworkPack.sendToServer(NetworkOpCode.REQUEST_ALL_MODELS, player.getUUID(), "");
                 }
             });
         });
         
-        // 注册玩家断开连接事件（清理远程玩家缓存 + 舞台模式）
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             MMDCameraController.getInstance().exitStageMode();
             PlayerModelSyncManager.onDisconnect();
             MmdSkinRendererPlayerHelper.onDisconnect();
+            BoneSyncManager.onDisconnect();
+            com.shiroha.mmdskin.ui.stage.StageInviteManager.getInstance().onDisconnect();
         });
-        
-        logger.info("MMD Skin 客户端注册完成");
     }
     
     /**
@@ -282,7 +281,6 @@ public class MmdSkinRegisterClient {
         if (className.contains("EntityMaid") || className.contains("touhoulittlemaid")) {
             String maidName = target.getName().getString();
             mc.setScreen(new MaidConfigWheelScreen(target.getUUID(), target.getId(), maidName, keyMaidConfigWheel));
-            logger.info("打开女仆配置轮盘: {} (ID: {})", maidName, target.getId());
         }
     }
 }

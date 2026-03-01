@@ -11,7 +11,7 @@ import java.util.UUID;
  * Fabric 网络 Payload
  * MC 1.21.1: 使用新的 CustomPacketPayload API
  */
-public record MmdSkinPayload(int opCode, UUID playerUUID, int intArg, int entityId, String stringArg) implements CustomPacketPayload {
+public record MmdSkinPayload(int opCode, UUID playerUUID, int intArg, int entityId, String stringArg, byte[] binaryData) implements CustomPacketPayload {
     
     public static final CustomPacketPayload.Type<MmdSkinPayload> TYPE = 
         new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mmdskin", "network"));
@@ -21,19 +21,20 @@ public record MmdSkinPayload(int opCode, UUID playerUUID, int intArg, int entity
         MmdSkinPayload::read
     );
     
-    // 构造函数：整数参数
     public static MmdSkinPayload createInt(int opCode, UUID playerUUID, int intArg) {
-        return new MmdSkinPayload(opCode, playerUUID, intArg, 0, "");
+        return new MmdSkinPayload(opCode, playerUUID, intArg, 0, "", new byte[0]);
     }
     
-    // 构造函数：字符串参数
     public static MmdSkinPayload createString(int opCode, UUID playerUUID, String stringArg) {
-        return new MmdSkinPayload(opCode, playerUUID, 0, 0, stringArg);
+        return new MmdSkinPayload(opCode, playerUUID, 0, 0, stringArg, new byte[0]);
     }
     
-    // 构造函数：女仆相关（entityId + 字符串）
     public static MmdSkinPayload createMaid(int opCode, UUID playerUUID, int entityId, String stringArg) {
-        return new MmdSkinPayload(opCode, playerUUID, 0, entityId, stringArg);
+        return new MmdSkinPayload(opCode, playerUUID, 0, entityId, stringArg, new byte[0]);
+    }
+    
+    public static MmdSkinPayload createBinary(int opCode, UUID playerUUID, byte[] data) {
+        return new MmdSkinPayload(opCode, playerUUID, 0, 0, "", data);
     }
     
     private static MmdSkinPayload read(FriendlyByteBuf buf) {
@@ -42,7 +43,8 @@ public record MmdSkinPayload(int opCode, UUID playerUUID, int intArg, int entity
         int intArg = buf.readInt();
         int entityId = buf.readInt();
         String stringArg = buf.readUtf();
-        return new MmdSkinPayload(opCode, playerUUID, intArg, entityId, stringArg);
+        byte[] binaryData = buf.readByteArray();
+        return new MmdSkinPayload(opCode, playerUUID, intArg, entityId, stringArg, binaryData);
     }
     
     private static void write(FriendlyByteBuf buf, MmdSkinPayload payload) {
@@ -51,6 +53,7 @@ public record MmdSkinPayload(int opCode, UUID playerUUID, int intArg, int entity
         buf.writeInt(payload.intArg);
         buf.writeInt(payload.entityId);
         buf.writeUtf(payload.stringArg);
+        buf.writeByteArray(payload.binaryData);
     }
     
     @Override
