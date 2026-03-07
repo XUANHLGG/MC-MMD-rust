@@ -173,9 +173,9 @@ public class MmdSkinRegisterClient {
             com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper.tickPending();
 
             StageAudioPlayer.tickRemoteAttenuation();
-            
+
             BoneSyncManager.tickLocal();
-            
+
             // 舞台模式死亡/复活检测
             if (MCinstance.player != null) {
                 if (!MCinstance.player.isAlive()) {

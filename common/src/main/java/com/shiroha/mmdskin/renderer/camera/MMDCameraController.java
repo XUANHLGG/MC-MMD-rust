@@ -597,11 +597,9 @@ public class MMDCameraController {
     public boolean isPlaying() {
         return state == StageState.PLAYING;
     }
-
     public boolean isInStageMode() {
         return state != StageState.INACTIVE;
     }
-
     public boolean isStagePlayingModel(long handle) {
         return state == StageState.PLAYING && modelHandle != 0 && modelHandle == handle;
     }
