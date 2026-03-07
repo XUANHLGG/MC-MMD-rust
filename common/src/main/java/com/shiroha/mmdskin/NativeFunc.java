@@ -277,7 +277,22 @@ public class NativeFunc {
     public native int CopyMaterialMorphResultsToBuffer(long model, java.nio.ByteBuffer buffer);
     
     public native int BatchGetSubMeshData(long model, java.nio.ByteBuffer buffer);
-    
+
+    // ========== 物理配置相关 ==========
+
+    /**
+     * 设置全局物理配置（Bullet3，实时调整）
+     *
+     * @param enabled 是否启用物理模拟
+     * @param gravityY 重力 Y 分量（负数向下，MMD 标准 -98.0）
+     * @param physicsFps 物理 FPS（固定时间步）
+     * @param maxSubstepCount 每帧最大子步数
+     * @param inertiaStrength 惯性效果强度（0.0=无, 1.0=正常）
+     * @param maxLinearVelocity 最大线速度（防止物理爆炸）
+     * @param maxAngularVelocity 最大角速度（防止物理爆炸）
+     * @param jointsEnabled 是否启用关节
+     * @param debugLog 是否输出调试日志
+     */
     public native void SetPhysicsConfig(
         boolean enabled,
         float gravityY,
