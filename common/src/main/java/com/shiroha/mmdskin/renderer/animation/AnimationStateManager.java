@@ -114,6 +114,7 @@ public class AnimationStateManager {
         model.model.setLayerLoop(1, true);
         model.model.changeAnim(0, 1);
         model.model.changeAnim(0, 2);
+        model.model.resetPhysics();
         model.entityData.invalidateStateLayers();
     }
 
