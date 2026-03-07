@@ -95,11 +95,12 @@ public class StageInvitePanel {
         String tag;
         int color;
         switch (state) {
-            case PENDING:  tag = "...";  color = STATE_PENDING;  break;
+            case INVITED:  tag = "..."; color = STATE_PENDING; break;
             case ACCEPTED: tag = "\u2713"; color = STATE_ACCEPTED; break;
             case READY:    tag = "\u2605"; color = STATE_ACCEPTED; break;
-            case DECLINED: tag = "\u2717"; color = STATE_DECLINED; break;
-            default: tag = "\u25B6"; color = ACCENT; break;
+            case DECLINED:
+            case BUSY:     tag = "\u2717"; color = STATE_DECLINED; break;
+            default:       tag = "\u25B6"; color = ACCENT; break;
         }
         int w = font.width(tag);
         g.drawString(font, tag, rightX - w - 2, y, color, false);
@@ -114,7 +115,8 @@ public class StageInvitePanel {
 
         StageInviteManager.MemberState state = mgr.getMemberState(uuid);
         if (state == StageInviteManager.MemberState.NONE
-                || state == StageInviteManager.MemberState.DECLINED) {
+                || state == StageInviteManager.MemberState.DECLINED
+                || state == StageInviteManager.MemberState.BUSY) {
             mgr.sendInvite(uuid);
             return true;
         }

@@ -3,7 +3,6 @@ package com.shiroha.mmdskin.ui.stage;
 import com.shiroha.mmdskin.config.StagePack;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -11,8 +10,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 多人舞台动作分配面板，嵌入 StageSelectScreen 右侧
- * 房主为每个已接受邀请的成员分配 VMD 动作文件
+ * 多人舞台交互面板。
+ * 房主：邀请玩家 + 动作分配。
+ * 成员：查看房间成员与准备状态。
  */
 public class StageAssignPanel {
 
@@ -31,15 +31,16 @@ public class StageAssignPanel {
     private static final int HEADER_HEIGHT = 20;
     private static final int ITEM_HEIGHT = 16;
     private static final int MARGIN = 4;
-
     private static final int STATE_PENDING_COLOR = 0xFFD0A050;
     private static final int STATE_DECLINED_COLOR = 0xFFD05050;
+    private static final int STATE_BUSY_COLOR = 0xFFB06060;
 
     private final Font font;
     private int panelX, panelY, panelH;
 
-    private List<AbstractClientPlayer> nearbyPlayers = new ArrayList<>();
-    private int selectedMemberIndex = -1;
+    private List<StageInviteManager.HostEntry> hostEntries = new ArrayList<>();
+    private List<StageInviteManager.MemberView> guestMembers = new ArrayList<>();
+    private UUID selectedMemberUUID = null;
     private int hoveredMemberIndex = -1;
 
     private List<StagePack.VmdFileInfo> motionVmdFiles = new ArrayList<>();
@@ -49,8 +50,10 @@ public class StageAssignPanel {
     private int assignTop, assignBottom;
     private int splitY;
 
-    private int memberScrollOffset = 0, memberMaxScroll = 0;
-    private int assignScrollOffset = 0, assignMaxScroll = 0;
+    private int memberScrollOffset = 0;
+    private int memberMaxScroll = 0;
+    private int assignScrollOffset = 0;
+    private int assignMaxScroll = 0;
 
     private boolean hoverInviteBtn = false;
     private int inviteBtnX, inviteBtnY;
@@ -76,7 +79,7 @@ public class StageAssignPanel {
         inviteBtnX = panelX + PANEL_WIDTH - INVITE_BTN_W - 6;
         inviteBtnY = panelY + 3;
 
-        updateMemberScroll();
+        refreshPlayers();
         updateAssignScroll();
     }
 
@@ -94,11 +97,19 @@ public class StageAssignPanel {
     }
 
     public void refreshPlayers() {
-        this.nearbyPlayers = StageInviteManager.getInstance().getNearbyPlayers();
-        updateMemberScroll();
-        if (selectedMemberIndex >= nearbyPlayers.size()) {
-            selectedMemberIndex = -1;
+        StageInviteManager mgr = StageInviteManager.getInstance();
+        if (mgr.isSessionMember()) {
+            guestMembers = mgr.getSessionMembersView();
+        } else {
+            hostEntries = mgr.getHostPanelEntries();
+            if (selectedMemberUUID != null) {
+                boolean exists = hostEntries.stream().anyMatch(entry -> entry.uuid().equals(selectedMemberUUID));
+                if (!exists) {
+                    selectedMemberUUID = null;
+                }
+            }
         }
+        updateMemberScroll();
     }
 
     public void render(GuiGraphics g, int mouseX, int mouseY) {
@@ -108,127 +119,237 @@ public class StageAssignPanel {
         renderHeader(g, mouseX, mouseY);
         renderMemberList(g, mouseX, mouseY);
         renderSeparator(g);
-        renderAssignArea(g, mouseX, mouseY);
+        renderLowerArea(g, mouseX, mouseY);
     }
 
     private void renderHeader(GuiGraphics g, int mouseX, int mouseY) {
-        g.drawCenteredString(font,
-                Component.translatable("gui.mmdskin.stage.assign_title"),
-                panelX + PANEL_WIDTH / 2, panelY + 6, ACCENT);
+        StageInviteManager mgr = StageInviteManager.getInstance();
+        Component title = mgr.isSessionMember()
+                ? Component.translatable("gui.mmdskin.stage.session_members")
+                : Component.translatable("gui.mmdskin.stage.assign_title");
+        g.drawCenteredString(font, title, panelX + PANEL_WIDTH / 2, panelY + 6, ACCENT);
 
-        hoverInviteBtn = mouseX >= inviteBtnX && mouseX <= inviteBtnX + INVITE_BTN_W
+        hoverInviteBtn = !mgr.isSessionMember()
+                && mouseX >= inviteBtnX && mouseX <= inviteBtnX + INVITE_BTN_W
                 && mouseY >= inviteBtnY && mouseY <= inviteBtnY + INVITE_BTN_H;
-        int btnColor = hoverInviteBtn ? HOVER : 0x20FFFFFF;
-        g.fill(inviteBtnX, inviteBtnY, inviteBtnX + INVITE_BTN_W, inviteBtnY + INVITE_BTN_H, btnColor);
-        g.drawCenteredString(font, "+", inviteBtnX + INVITE_BTN_W / 2, inviteBtnY + 3, ACCENT);
+        if (!mgr.isSessionMember()) {
+            int btnColor = hoverInviteBtn ? HOVER : 0x20FFFFFF;
+            g.fill(inviteBtnX, inviteBtnY, inviteBtnX + INVITE_BTN_W, inviteBtnY + INVITE_BTN_H, btnColor);
+            g.drawCenteredString(font, "+", inviteBtnX + INVITE_BTN_W / 2, inviteBtnY + 3, ACCENT);
+        }
     }
 
     private void renderMemberList(GuiGraphics g, int mouseX, int mouseY) {
+        hoveredMemberIndex = -1;
         g.enableScissor(panelX, memberListTop, panelX + PANEL_WIDTH, memberListBottom);
 
-        hoveredMemberIndex = -1;
         StageInviteManager mgr = StageInviteManager.getInstance();
-        StageMotionAssignment assignment = StageMotionAssignment.getInstance();
-
-        if (nearbyPlayers.isEmpty()) {
-            g.drawCenteredString(font,
-                    Component.translatable("gui.mmdskin.stage.no_nearby"),
-                    panelX + PANEL_WIDTH / 2, memberListTop + 4, TEXT_DIM);
-            g.disableScissor();
-            return;
-        }
-
-        for (int i = 0; i < nearbyPlayers.size(); i++) {
-            AbstractClientPlayer player = nearbyPlayers.get(i);
-            int itemY = memberListTop + i * ITEM_HEIGHT - memberScrollOffset;
-
-            if (itemY + ITEM_HEIGHT < memberListTop || itemY > memberListBottom) continue;
-
-            int itemX = panelX + 4;
-            int itemW = PANEL_WIDTH - 8;
-            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
-                    && mouseY >= Math.max(itemY, memberListTop)
-                    && mouseY <= Math.min(itemY + ITEM_HEIGHT, memberListBottom);
-            if (hovered) hoveredMemberIndex = i;
-
-            if (i == selectedMemberIndex) {
-                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, SELECTED);
-            } else if (hovered) {
-                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
-            }
-
-            String name = truncate(player.getName().getString(), 10);
-            g.drawString(font, name, itemX + 2, itemY + 4, TEXT, false);
-
-            UUID uuid = player.getUUID();
-            StageInviteManager.MemberState state = mgr.getMemberState(uuid);
-            int tagX = itemX + itemW;
-
-            if (assignment.hasAssignment(uuid)) {
-                tagX -= font.width("♪") + 2;
-                g.drawString(font, "♪", tagX, itemY + 4, ASSIGNED, false);
-            }
-
-            renderMemberState(g, tagX, itemY + 4, state);
+        if (mgr.isSessionMember()) {
+            renderGuestMembers(g, mouseX, mouseY);
+        } else {
+            renderHostMembers(g, mouseX, mouseY);
         }
 
         g.disableScissor();
         renderScrollbar(g, memberListTop, memberListBottom, memberScrollOffset, memberMaxScroll);
     }
 
+    private void renderHostMembers(GuiGraphics g, int mouseX, int mouseY) {
+        if (hostEntries.isEmpty()) {
+            g.drawCenteredString(font,
+                    Component.translatable("gui.mmdskin.stage.no_nearby"),
+                    panelX + PANEL_WIDTH / 2, memberListTop + 4, TEXT_DIM);
+            return;
+        }
+
+        StageMotionAssignment assignment = StageMotionAssignment.getInstance();
+        for (int i = 0; i < hostEntries.size(); i++) {
+            StageInviteManager.HostEntry entry = hostEntries.get(i);
+            int itemY = memberListTop + i * ITEM_HEIGHT - memberScrollOffset;
+            if (itemY + ITEM_HEIGHT < memberListTop || itemY > memberListBottom) {
+                continue;
+            }
+
+            int itemX = panelX + 4;
+            int itemW = PANEL_WIDTH - 8;
+            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
+                    && mouseY >= Math.max(itemY, memberListTop)
+                    && mouseY <= Math.min(itemY + ITEM_HEIGHT, memberListBottom);
+            if (hovered) {
+                hoveredMemberIndex = i;
+            }
+
+            if (entry.uuid().equals(selectedMemberUUID)) {
+                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, SELECTED);
+            } else if (hovered) {
+                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
+            }
+
+            String name = truncate(entry.name(), 11);
+            int nameColor = entry.nearby() ? TEXT : TEXT_DIM;
+            g.drawString(font, name, itemX + 2, itemY + 4, nameColor, false);
+
+            int tagX = itemX + itemW;
+            if (assignment.hasAssignment(entry.uuid())) {
+                tagX -= font.width("♪") + 2;
+                g.drawString(font, "♪", tagX, itemY + 4, ASSIGNED, false);
+            }
+            renderMemberState(g, tagX, itemY + 4, entry.state(), entry.useHostCamera());
+        }
+    }
+
+    private void renderGuestMembers(GuiGraphics g, int mouseX, int mouseY) {
+        if (guestMembers.isEmpty()) {
+            g.drawCenteredString(font,
+                    Component.translatable("gui.mmdskin.stage.waiting_host"),
+                    panelX + PANEL_WIDTH / 2, memberListTop + 4, TEXT_DIM);
+            return;
+        }
+
+        for (int i = 0; i < guestMembers.size(); i++) {
+            StageInviteManager.MemberView member = guestMembers.get(i);
+            int itemY = memberListTop + i * ITEM_HEIGHT - memberScrollOffset;
+            if (itemY + ITEM_HEIGHT < memberListTop || itemY > memberListBottom) {
+                continue;
+            }
+
+            int itemX = panelX + 4;
+            int itemW = PANEL_WIDTH - 8;
+            boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
+                    && mouseY >= Math.max(itemY, memberListTop)
+                    && mouseY <= Math.min(itemY + ITEM_HEIGHT, memberListBottom);
+            if (hovered) {
+                hoveredMemberIndex = i;
+                g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
+            }
+
+            String prefix = member.local() ? "*" : member.host() ? "H" : " ";
+            String name = truncate(prefix + " " + member.name(), 12);
+            g.drawString(font, name, itemX + 2, itemY + 4, TEXT, false);
+            renderMemberState(g, itemX + itemW, itemY + 4, member.state(), member.useHostCamera());
+        }
+    }
+
     private void renderMemberState(GuiGraphics g, int rightX, int y,
-                                    StageInviteManager.MemberState state) {
+                                   StageInviteManager.MemberState state, boolean useHostCamera) {
         String tag;
         int color;
         switch (state) {
-            case PENDING:  tag = "..."; color = STATE_PENDING_COLOR; break;
-            case ACCEPTED: tag = "✓";   color = ASSIGNED;           break;
-            case READY:    tag = "★";   color = CHECKBOX_ON;        break;
-            case DECLINED: tag = "✗";   color = STATE_DECLINED_COLOR; break;
-            default:       tag = "▶";   color = ACCENT;             break;
+            case HOST -> {
+                tag = "H";
+                color = ACCENT;
+            }
+            case INVITED -> {
+                tag = "...";
+                color = STATE_PENDING_COLOR;
+            }
+            case ACCEPTED -> {
+                tag = useHostCamera ? "C" : "✓";
+                color = ASSIGNED;
+            }
+            case READY -> {
+                tag = useHostCamera ? "★C" : "★";
+                color = CHECKBOX_ON;
+            }
+            case DECLINED -> {
+                tag = "✗";
+                color = STATE_DECLINED_COLOR;
+            }
+            case BUSY -> {
+                tag = "!";
+                color = STATE_BUSY_COLOR;
+            }
+            default -> {
+                tag = "+";
+                color = UNASSIGNED;
+            }
         }
-        int w = font.width(tag);
-        g.drawString(font, tag, rightX - w - 2, y, color, false);
+        int width = font.width(tag);
+        g.drawString(font, tag, rightX - width - 2, y, color, false);
     }
 
     private void renderSeparator(GuiGraphics g) {
         g.fill(panelX + 8, splitY - 1, panelX + PANEL_WIDTH - 8, splitY, 0x30FFFFFF);
     }
 
+    private void renderLowerArea(GuiGraphics g, int mouseX, int mouseY) {
+        if (StageInviteManager.getInstance().isSessionMember()) {
+            renderGuestInfo(g);
+        } else {
+            renderAssignArea(g, mouseX, mouseY);
+        }
+    }
+
+    private void renderGuestInfo(GuiGraphics g) {
+        StageInviteManager mgr = StageInviteManager.getInstance();
+        List<StageInviteManager.MemberView> members = mgr.getSessionMembersView();
+
+        StageInviteManager.MemberView host = members.stream().filter(StageInviteManager.MemberView::host).findFirst().orElse(null);
+        int totalMembers = Math.max(0, members.size() - 1);
+        int readyMembers = 0;
+        for (StageInviteManager.MemberView member : members) {
+            if (!member.host() && member.state() == StageInviteManager.MemberState.READY) {
+                readyMembers++;
+            }
+        }
+
+        int y = splitY + 8;
+        g.drawString(font,
+                Component.translatable("gui.mmdskin.stage.host_label",
+                        host != null ? host.name() : "-").getString(),
+                panelX + 6, y, TEXT, false);
+        y += 18;
+        g.drawString(font,
+                Component.translatable("gui.mmdskin.stage.ready_summary", readyMembers, totalMembers).getString(),
+                panelX + 6, y, TEXT_DIM, false);
+        y += 18;
+        g.drawString(font,
+                Component.translatable("gui.mmdskin.stage.camera_pref",
+                        Component.translatable(mgr.isUseHostCamera() ? "gui.mmdskin.stage.on" : "gui.mmdskin.stage.off")).getString(),
+                panelX + 6, y, TEXT_DIM, false);
+        y += 18;
+        g.drawString(font,
+                Component.translatable(mgr.isLocalReady() ? "gui.mmdskin.stage.ready_done" : "gui.mmdskin.stage.waiting_host"),
+                panelX + 6, y, mgr.isLocalReady() ? CHECKBOX_ON : TEXT_DIM, false);
+    }
+
     private void renderAssignArea(GuiGraphics g, int mouseX, int mouseY) {
         hoveredVmdIndex = -1;
 
-        AbstractClientPlayer selectedPlayer = getSelectedAcceptedPlayer();
-        if (selectedPlayer == null) {
+        UUID memberUUID = getSelectedAssignableMemberUUID();
+        if (memberUUID == null) {
             g.drawCenteredString(font,
                     Component.translatable("gui.mmdskin.stage.select_member"),
                     panelX + PANEL_WIDTH / 2, splitY + 6, TEXT_DIM);
             return;
         }
 
-        String label = Component.translatable("gui.mmdskin.stage.assign_for",
-                selectedPlayer.getName().getString()).getString();
+        String memberName = hostEntries.stream()
+                .filter(entry -> entry.uuid().equals(memberUUID))
+                .map(StageInviteManager.HostEntry::name)
+                .findFirst()
+                .orElse(memberUUID.toString().substring(0, 8));
+
+        String label = Component.translatable("gui.mmdskin.stage.assign_for", memberName).getString();
         g.drawString(font, truncate(label, 24), panelX + 6, splitY + 4, TEXT, false);
 
         g.enableScissor(panelX, assignTop, panelX + PANEL_WIDTH, assignBottom);
 
-        UUID uuid = selectedPlayer.getUUID();
-        List<String> assigned = StageMotionAssignment.getInstance().getAssignment(uuid);
-
+        List<String> assigned = StageMotionAssignment.getInstance().getAssignment(memberUUID);
         for (int i = 0; i < motionVmdFiles.size(); i++) {
             StagePack.VmdFileInfo info = motionVmdFiles.get(i);
             int itemY = assignTop + i * ITEM_HEIGHT - assignScrollOffset;
-
-            if (itemY + ITEM_HEIGHT < assignTop || itemY > assignBottom) continue;
+            if (itemY + ITEM_HEIGHT < assignTop || itemY > assignBottom) {
+                continue;
+            }
 
             int itemX = panelX + 4;
             int itemW = PANEL_WIDTH - 8;
             boolean hovered = mouseX >= itemX && mouseX <= itemX + itemW
                     && mouseY >= Math.max(itemY, assignTop)
                     && mouseY <= Math.min(itemY + ITEM_HEIGHT, assignBottom);
-            if (hovered) hoveredVmdIndex = i;
-
             if (hovered) {
+                hoveredVmdIndex = i;
                 g.fill(itemX, itemY, itemX + itemW, itemY + ITEM_HEIGHT, HOVER);
             }
 
@@ -241,10 +362,9 @@ public class StageAssignPanel {
                 g.drawString(font, "✓", cbX + 1, cbY, 0xFFFFFFFF, false);
             }
 
-            String fileName = info.name;
-            if (fileName.toLowerCase().endsWith(".vmd")) {
-                fileName = fileName.substring(0, fileName.length() - 4);
-            }
+            String fileName = info.name.toLowerCase().endsWith(".vmd")
+                    ? info.name.substring(0, info.name.length() - 4)
+                    : info.name;
             g.drawString(font, truncate(fileName, 14), cbX + cbSize + 4, itemY + 4, TEXT, false);
 
             String typeTag = info.getTypeTag();
@@ -257,7 +377,9 @@ public class StageAssignPanel {
     }
 
     private void renderScrollbar(GuiGraphics g, int top, int bottom, int offset, int maxScroll) {
-        if (maxScroll <= 0) return;
+        if (maxScroll <= 0) {
+            return;
+        }
         int barX = panelX + PANEL_WIDTH - 4;
         int barH = bottom - top;
         g.fill(barX, top, barX + 2, bottom, 0x20FFFFFF);
@@ -267,44 +389,60 @@ public class StageAssignPanel {
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return false;
+        if (button != 0) {
+            return false;
+        }
 
-        if (hoverInviteBtn) {
+        StageInviteManager mgr = StageInviteManager.getInstance();
+        if (!mgr.isSessionMember() && hoverInviteBtn) {
             inviteAllNone();
             return true;
         }
 
-        if (hoveredMemberIndex >= 0 && hoveredMemberIndex < nearbyPlayers.size()) {
-            AbstractClientPlayer player = nearbyPlayers.get(hoveredMemberIndex);
-            UUID uuid = player.getUUID();
-            StageInviteManager mgr = StageInviteManager.getInstance();
-            StageInviteManager.MemberState state = mgr.getMemberState(uuid);
+        if (hoveredMemberIndex >= 0) {
+            if (mgr.isSessionMember()) {
+                return false;
+            }
 
-            if (state == StageInviteManager.MemberState.NONE) {
-                mgr.sendInvite(uuid);
-                return true;
+            if (hoveredMemberIndex < hostEntries.size()) {
+                StageInviteManager.HostEntry entry = hostEntries.get(hoveredMemberIndex);
+                switch (entry.state()) {
+                    case NONE, DECLINED, BUSY -> {
+                        mgr.sendInvite(entry.uuid());
+                        return true;
+                    }
+                    case INVITED -> {
+                        mgr.cancelInvite(entry.uuid());
+                        if (entry.uuid().equals(selectedMemberUUID)) {
+                            selectedMemberUUID = null;
+                        }
+                        return true;
+                    }
+                    case ACCEPTED, READY -> {
+                        selectedMemberUUID = entry.uuid();
+                        assignScrollOffset = 0;
+                        updateAssignScroll();
+                        return true;
+                    }
+                    default -> {
+                        return false;
+                    }
+                }
             }
-            if (state == StageInviteManager.MemberState.ACCEPTED) {
-                selectedMemberIndex = hoveredMemberIndex;
-                assignScrollOffset = 0;
-                updateAssignScroll();
-                return true;
-            }
-            return false;
         }
 
         if (hoveredVmdIndex >= 0 && hoveredVmdIndex < motionVmdFiles.size()) {
-            AbstractClientPlayer selectedPlayer = getSelectedAcceptedPlayer();
-            if (selectedPlayer == null) return false;
+            UUID memberUUID = getSelectedAssignableMemberUUID();
+            if (memberUUID == null) {
+                return false;
+            }
 
-            UUID uuid = selectedPlayer.getUUID();
             StagePack.VmdFileInfo info = motionVmdFiles.get(hoveredVmdIndex);
             StageMotionAssignment assignment = StageMotionAssignment.getInstance();
-
-            if (assignment.getAssignment(uuid).contains(info.name)) {
-                assignment.removeSingleVmd(uuid, info.name);
+            if (assignment.getAssignment(memberUUID).contains(info.name)) {
+                assignment.removeSingleVmd(memberUUID, info.name);
             } else {
-                assignment.assignSingle(uuid, info.name);
+                assignment.assignSingle(memberUUID, info.name);
             }
             return true;
         }
@@ -313,13 +451,14 @@ public class StageAssignPanel {
     }
 
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (!isInside(mouseX, mouseY)) return false;
+        if (!isInside(mouseX, mouseY)) {
+            return false;
+        }
 
         int scrollAmount = (int) (-delta * ITEM_HEIGHT * 3);
-
         if (mouseY < splitY) {
             memberScrollOffset = Math.max(0, Math.min(memberMaxScroll, memberScrollOffset + scrollAmount));
-        } else {
+        } else if (!StageInviteManager.getInstance().isSessionMember()) {
             assignScrollOffset = Math.max(0, Math.min(assignMaxScroll, assignScrollOffset + scrollAmount));
         }
         return true;
@@ -330,25 +469,31 @@ public class StageAssignPanel {
                 && mouseY >= panelY && mouseY <= panelY + panelH;
     }
 
-    private AbstractClientPlayer getSelectedAcceptedPlayer() {
-        if (selectedMemberIndex < 0 || selectedMemberIndex >= nearbyPlayers.size()) return null;
-        AbstractClientPlayer player = nearbyPlayers.get(selectedMemberIndex);
-        StageInviteManager.MemberState state =
-                StageInviteManager.getInstance().getMemberState(player.getUUID());
-        return state == StageInviteManager.MemberState.ACCEPTED ? player : null;
+    private UUID getSelectedAssignableMemberUUID() {
+        if (selectedMemberUUID == null) {
+            return null;
+        }
+        return hostEntries.stream()
+                .filter(entry -> entry.uuid().equals(selectedMemberUUID))
+                .filter(entry -> entry.state() == StageInviteManager.MemberState.ACCEPTED
+                        || entry.state() == StageInviteManager.MemberState.READY)
+                .map(StageInviteManager.HostEntry::uuid)
+                .findFirst()
+                .orElse(null);
     }
 
     private void inviteAllNone() {
         StageInviteManager mgr = StageInviteManager.getInstance();
-        for (AbstractClientPlayer player : nearbyPlayers) {
-            if (mgr.getMemberState(player.getUUID()) == StageInviteManager.MemberState.NONE) {
-                mgr.sendInvite(player.getUUID());
+        for (StageInviteManager.HostEntry entry : hostEntries) {
+            if (entry.state() == StageInviteManager.MemberState.NONE && entry.nearby()) {
+                mgr.sendInvite(entry.uuid());
             }
         }
     }
 
     private void updateMemberScroll() {
-        int contentH = nearbyPlayers.size() * ITEM_HEIGHT;
+        int size = StageInviteManager.getInstance().isSessionMember() ? guestMembers.size() : hostEntries.size();
+        int contentH = size * ITEM_HEIGHT;
         int visibleH = memberListBottom - memberListTop;
         memberMaxScroll = Math.max(0, contentH - visibleH);
         memberScrollOffset = Math.max(0, Math.min(memberMaxScroll, memberScrollOffset));

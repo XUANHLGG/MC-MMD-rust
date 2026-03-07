@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.renderer.render;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.config.PathConstants;
+import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
 import net.minecraft.world.entity.player.Player;
 import org.apache.logging.log4j.LogManager;
@@ -84,23 +85,21 @@ public final class StageAnimSyncHelper {
         
         long mergedAnim = loadAndMergeAnimations(stageDir, parts);
         if (mergedAnim == 0) return;
-        
+
         MMDModelManager.Model mwed = resolved.model();
         NativeFunc nf = NativeFunc.GetInst();
         long modelHandle = mwed.model.getModelHandle();
-        nf.TransitionLayerTo(modelHandle, 0, mergedAnim, 0.3f);
-        mwed.model.setLayerLoop(1, true);
-        mwed.model.changeAnim(0, 1);
-        mwed.model.changeAnim(0, 2);
-        mwed.model.resetPhysics();
-        mwed.entityData.playCustomAnim = true;
-        mwed.entityData.playStageAnim = true;
-        mwed.entityData.invalidateStateLayers();
-        
+        MmdSkinRendererPlayerHelper.startStageAnimation(mwed, mergedAnim);
+
         List<Long> tracked = new CopyOnWriteArrayList<>();
         tracked.add(mergedAnim);
         remoteStageAnims.put(playerUUID, tracked);
         remoteStageModels.put(playerUUID, modelHandle);
+
+        MMDCameraController controller = MMDCameraController.getInstance();
+        if (controller.isActive()) {
+            nf.SeekLayer(modelHandle, 0, controller.getCurrentFrame());
+        }
     }
     
     public static void tickPending() {
@@ -142,19 +141,10 @@ public final class StageAnimSyncHelper {
         
         UUID uuid = player.getUUID();
         cleanupRemoteStageAnim(uuid);
-        
+
         PlayerModelResolver.Result resolved = PlayerModelResolver.resolve(player);
         if (resolved != null) {
-            MMDModelManager.Model mwed = resolved.model();
-            mwed.entityData.playCustomAnim = false;
-            mwed.entityData.playStageAnim = false;
-            mwed.model.changeAnim(
-                com.shiroha.mmdskin.renderer.animation.MMDAnimManager.GetAnimModel(mwed.model, "idle"), 0);
-            mwed.model.setLayerLoop(1, true);
-            mwed.model.changeAnim(0, 1);
-            mwed.model.changeAnim(0, 2);
-            mwed.model.resetPhysics();
-            mwed.entityData.invalidateStateLayers();
+            MmdSkinRendererPlayerHelper.resetModelAnimationState(player, resolved.model());
         }
     }
     

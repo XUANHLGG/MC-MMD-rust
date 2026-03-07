@@ -6,6 +6,7 @@ import com.shiroha.mmdskin.config.StagePack;
 import com.shiroha.mmdskin.config.StageConfig;
 import com.shiroha.mmdskin.renderer.camera.MMDCameraController;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
+import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.ui.config.ModelSelectorConfig;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
 import net.minecraft.client.Minecraft;
@@ -74,7 +75,6 @@ public class StageSelectScreen extends Screen {
     private boolean draggingHeightSlider = false;
     private boolean hoverReady = false;
     private boolean hoverGuestCameraToggle = false;
-    private boolean guestReady = false;
     
     private int panelX, panelY, panelH;
     private int packListTop, packListBottom;
@@ -121,7 +121,8 @@ public class StageSelectScreen extends Screen {
         MMDCameraController ctrl = MMDCameraController.getInstance();
         ctrl.enterStageMode();
 
-        if (StageInviteManager.getInstance().getWatchingHostUUID() != null) {
+        StageInviteManager mgr = StageInviteManager.getInstance();
+        if (mgr.isSessionMember()) {
             ctrl.setWaitingForHost(true);
         }
 
@@ -129,7 +130,7 @@ public class StageSelectScreen extends Screen {
         panelY = PANEL_MARGIN;
         panelH = this.height - PANEL_MARGIN * 2;
         
-        boolean isGuest = ctrl.isWaitingForHost();
+        boolean isGuest = mgr.isSessionMember();
         int footerH = isGuest ? GUEST_FOOTER_HEIGHT : FOOTER_HEIGHT;
         
         packListTop = panelY + HEADER_HEIGHT;
@@ -356,7 +357,7 @@ public class StageSelectScreen extends Screen {
     }
     
     private void renderFooter(GuiGraphics g, int mouseX, int mouseY) {
-        boolean isGuest = MMDCameraController.getInstance().isWaitingForHost();
+        boolean isGuest = StageInviteManager.getInstance().isSessionMember();
         int footerH = isGuest ? GUEST_FOOTER_HEIGHT : FOOTER_HEIGHT;
         int footerY = panelY + panelH - footerH;
         
@@ -444,6 +445,7 @@ public class StageSelectScreen extends Screen {
     private void renderGuestFooter(GuiGraphics g, int mouseX, int mouseY, int footerY) {
         StageInviteManager mgr = StageInviteManager.getInstance();
         boolean useHostCamera = mgr.isUseHostCamera();
+        boolean guestReady = mgr.isLocalReady();
         
         int toggleX = panelX + 8;
         int toggleY = footerY + 4;
@@ -484,23 +486,19 @@ public class StageSelectScreen extends Screen {
                            cancelX + btnW / 2, btnY + 4, COLOR_TEXT);
         
         int readyX = panelX + 6;
-        if (guestReady) {
-            g.drawCenteredString(this.font,
-                Component.translatable("gui.mmdskin.stage.waiting_host"),
-                readyX + btnW / 2, btnY + 4, COLOR_TEXT_DIM);
-            
-            g.drawCenteredString(this.font,
-                Component.translatable("gui.mmdskin.stage.ready_done"),
-                panelX + PANEL_WIDTH / 2, btnY + 22, COLOR_TOGGLE_ON);
-        } else {
-            hoverReady = mouseX >= readyX && mouseX < readyX + btnW
-                       && mouseY >= btnY && mouseY < btnY + btnH;
-            int readyColor = hoverReady ? 0xFF50C070 : COLOR_BTN_START;
-            g.fill(readyX, btnY, readyX + btnW, btnY + btnH, readyColor);
-            g.drawCenteredString(this.font,
-                Component.translatable("gui.mmdskin.stage.ready"),
-                readyX + btnW / 2, btnY + 4, 0xFFFFFFFF);
-        }
+        hoverReady = mouseX >= readyX && mouseX < readyX + btnW
+                   && mouseY >= btnY && mouseY < btnY + btnH;
+        int readyColor = guestReady
+                ? (hoverReady ? 0xFF4F90AC : 0xFF3B7188)
+                : (hoverReady ? 0xFF50C070 : COLOR_BTN_START);
+        g.fill(readyX, btnY, readyX + btnW, btnY + btnH, readyColor);
+        g.drawCenteredString(this.font,
+            Component.translatable(guestReady ? "gui.mmdskin.stage.unready" : "gui.mmdskin.stage.ready"),
+            readyX + btnW / 2, btnY + 4, 0xFFFFFFFF);
+        
+        g.drawCenteredString(this.font,
+            Component.translatable(guestReady ? "gui.mmdskin.stage.ready_done" : "gui.mmdskin.stage.waiting_host"),
+            panelX + PANEL_WIDTH / 2, btnY + 22, guestReady ? COLOR_TOGGLE_ON : COLOR_TEXT_DIM);
     }
     
     private boolean canStartStage() {
@@ -518,7 +516,7 @@ public class StageSelectScreen extends Screen {
                 if (assignPanel.mouseClicked(mouseX, mouseY, button)) return true;
             }
             
-            boolean isGuest = MMDCameraController.getInstance().isWaitingForHost();
+            boolean isGuest = StageInviteManager.getInstance().isSessionMember();
             
             if (!isGuest) {
                 int footerY = panelY + panelH - FOOTER_HEIGHT;
@@ -532,19 +530,15 @@ public class StageSelectScreen extends Screen {
                 }
             }
             
-            if (isGuest && hoverGuestCameraToggle && !guestReady) {
+            if (isGuest && hoverGuestCameraToggle) {
                 StageInviteManager mgr = StageInviteManager.getInstance();
                 mgr.setUseHostCamera(!mgr.isUseHostCamera());
                 return true;
             }
             
-            if (isGuest && hoverReady && !guestReady) {
-                guestReady = true;
+            if (isGuest && hoverReady) {
                 StageInviteManager mgr = StageInviteManager.getInstance();
-                UUID hostUUID = mgr.getWatchingHostUUID();
-                if (hostUUID != null) {
-                    StageNetworkHandler.sendReady(hostUUID, mgr.isUseHostCamera());
-                }
+                mgr.setLocalReady(!mgr.isLocalReady());
                 return true;
             }
             
@@ -690,8 +684,6 @@ public class StageSelectScreen extends Screen {
             stageData.append("|").append(cameraFile.name);
         }
         
-        notifyMembersWithAssignment(pack.getName(), stageData.toString(), cameraFile);
-        
         if (mc.player != null) {
             String playerName = mc.player.getName().getString();
             modelName = ModelSelectorConfig.getInstance().getSelectedModel();
@@ -699,9 +691,7 @@ public class StageSelectScreen extends Screen {
                 MMDModelManager.Model modelData = MMDModelManager.GetModel(modelName, playerName);
                 if (modelData != null) {
                     modelHandle = modelData.model.getModelHandle();
-                    nf.TransitionLayerTo(modelHandle, 0, mergedAnim, 0.3f);
-                    modelData.entityData.playCustomAnim = true;
-                    modelData.entityData.playStageAnim = true;
+                    MmdSkinRendererPlayerHelper.startStageAnimation(modelData, mergedAnim);
                 }
             }
         }
@@ -715,6 +705,8 @@ public class StageSelectScreen extends Screen {
             logger.warn("[舞台模式] 相机控制器启动失败，已释放动画句柄");
             return;
         }
+
+        notifyMembersWithAssignment(pack.getName(), stageData.toString(), cameraFile);
         
         StageNetworkHandler.sendStageStart(stageData.toString());
         
@@ -726,18 +718,18 @@ public class StageSelectScreen extends Screen {
     public void onClose() {
         if (!stageStarted) {
             MMDCameraController ctrl = MMDCameraController.getInstance();
-            if (ctrl.isWaitingForHost()) {
-                UUID hostUUID = StageInviteManager.getInstance().getWatchingHostUUID();
+            StageInviteManager mgr = StageInviteManager.getInstance();
+            if (mgr.isSessionMember()) {
+                UUID hostUUID = mgr.getWatchingHostUUID();
                 if (hostUUID != null) {
-                    StageNetworkHandler.sendLeave(hostUUID);
+                    StageNetworkHandler.sendLeave(hostUUID, mgr.getSessionId());
                 }
                 ctrl.setWaitingForHost(false);
                 ctrl.exitStageMode();
-                StageInviteManager.getInstance().stopWatching();
+                mgr.stopWatching();
             } else {
                 ctrl.exitStageMode();
-                StageInviteManager.getInstance().resetHostState();
-                StageMotionAssignment.getInstance().reset();
+                mgr.closeHostedSession();
             }
         }
         super.onClose();
@@ -759,6 +751,7 @@ public class StageSelectScreen extends Screen {
                                               StagePack.VmdFileInfo cameraFile) {
         StageMotionAssignment assignment = StageMotionAssignment.getInstance();
         StageInviteManager mgr = StageInviteManager.getInstance();
+        UUID sessionId = mgr.getSessionId();
         
         for (UUID memberUUID : mgr.getAcceptedMembers()) {
             String memberData;
@@ -771,8 +764,8 @@ public class StageSelectScreen extends Screen {
                 memberData = defaultStageData;
             }
             if (memberData != null) {
-                StageNetworkHandler.sendStageWatch(memberUUID, 
-                    memberData + "|HEIGHT:" + cameraHeightOffset + "|FRAME:0.0");
+                StageNetworkHandler.sendStageWatch(memberUUID, sessionId,
+                    memberData, cameraHeightOffset, 0.0f);
             }
         }
     }

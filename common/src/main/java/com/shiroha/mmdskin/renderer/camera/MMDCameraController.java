@@ -2,6 +2,7 @@ package com.shiroha.mmdskin.renderer.camera;
 
 import com.shiroha.mmdskin.NativeFunc;
 import com.shiroha.mmdskin.renderer.model.MMDModelManager;
+import com.shiroha.mmdskin.renderer.render.MmdSkinRendererPlayerHelper;
 import com.shiroha.mmdskin.renderer.render.PlayerModelResolver;
 import com.shiroha.mmdskin.renderer.render.StageAnimSyncHelper;
 import com.shiroha.mmdskin.ui.network.StageNetworkHandler;
@@ -302,8 +303,7 @@ public class MMDCameraController {
                 this.waitingForHost = true;
                 mc.setScreen(new com.shiroha.mmdskin.ui.stage.StageSelectScreen());
             } else {
-                mgr.notifyMembersStageEnd();
-                mgr.resetHostState();
+                mgr.closeHostedSession();
             }
         }
 
@@ -418,7 +418,10 @@ public class MMDCameraController {
             frameSyncCounter++;
             if (frameSyncCounter >= SYNC_INTERVAL_FRAMES) {
                 frameSyncCounter = 0;
-                StageNetworkHandler.sendFrameSync(currentFrame);
+                StageNetworkHandler.sendFrameSync(
+                        com.shiroha.mmdskin.ui.stage.StageInviteManager.getInstance().getSessionId(),
+                        currentFrame
+                );
             }
         }
 
@@ -562,8 +565,7 @@ public class MMDCameraController {
                 nf.SetAutoBlinkEnabled(handle, true);
                 nf.SetEyeTrackingEnabled(handle, true);
             }
-            mwed.model.resetPhysics();
-            mwed.entityData.invalidateStateLayers();
+            MmdSkinRendererPlayerHelper.resetModelAnimationState(mc.player, mwed);
         }
     }
 
