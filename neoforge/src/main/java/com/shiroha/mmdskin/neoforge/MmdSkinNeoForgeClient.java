@@ -6,7 +6,7 @@ import com.shiroha.mmdskin.neoforge.config.MmdSkinConfig;
 import com.shiroha.mmdskin.neoforge.maid.MaidRenderEventHandler;
 import com.shiroha.mmdskin.neoforge.maid.MaidSyncEventHandler;
 import com.shiroha.mmdskin.neoforge.register.MmdSkinRegisterClient;
-import com.shiroha.mmdskin.renderer.runtime.model.MMDModelOpenGL;
+import com.shiroha.mmdskin.renderer.runtime.model.opengl.MMDModelOpenGL;
 
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
