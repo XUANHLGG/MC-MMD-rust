@@ -9,6 +9,7 @@ import com.shiroha.mmdskin.config.ConfigManager;
 import com.shiroha.mmdskin.renderer.compat.IrisCompat;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonShaderCpu;
 import com.shiroha.mmdskin.renderer.pipeline.shader.ToonRenderHelper;
+import com.shiroha.mmdskin.renderer.runtime.model.AbstractMMDModel;
 import com.shiroha.mmdskin.renderer.runtime.model.helper.LightingHelper;
 import com.shiroha.mmdskin.renderer.runtime.model.shared.SubMeshDrawHelper;
 import net.minecraft.client.Minecraft;
@@ -165,7 +166,7 @@ final class MMDModelOpenGLRenderer {
     private static void uploadMatrixUniforms(MMDModelOpenGL target, PoseStack deliverStack) {
         target.modelViewMatBuff.clear();
         target.projMatBuff.clear();
-        deliverStack.last().pose().get(target.modelViewMatBuff);
+        AbstractMMDModel.computeModelViewMatrix(deliverStack).get(target.modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
 
         if (MmdSkinClient.usingMMDShader != 1) {
@@ -398,7 +399,7 @@ final class MMDModelOpenGLRenderer {
 
         target.modelViewMatBuff.clear();
         target.projMatBuff.clear();
-        deliverStack.last().pose().get(target.modelViewMatBuff);
+        AbstractMMDModel.computeModelViewMatrix(deliverStack).get(target.modelViewMatBuff);
         RenderSystem.getProjectionMatrix().get(target.projMatBuff);
         GL46C.glBindBuffer(GL46C.GL_ELEMENT_ARRAY_BUFFER, target.indexBufferObject);
 

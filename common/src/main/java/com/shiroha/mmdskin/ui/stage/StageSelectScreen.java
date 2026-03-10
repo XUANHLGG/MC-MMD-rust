@@ -204,6 +204,10 @@ public class StageSelectScreen extends Screen {
         
         super.render(g, mouseX, mouseY, partialTick);
     }
+
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
     
     private void renderHeader(GuiGraphics g) {
         int cx = panelX + PANEL_WIDTH / 2;

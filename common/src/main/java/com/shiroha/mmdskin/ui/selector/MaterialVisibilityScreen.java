@@ -139,6 +139,10 @@ public class MaterialVisibilityScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
     private void renderHeader(GuiGraphics guiGraphics) {
         int cx = panelX + PANEL_WIDTH / 2;
 

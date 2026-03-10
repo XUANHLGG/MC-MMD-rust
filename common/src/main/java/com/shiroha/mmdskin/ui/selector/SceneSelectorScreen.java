@@ -127,6 +127,10 @@ public class SceneSelectorScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    }
+
     private void renderHeader(GuiGraphics guiGraphics) {
         int cx = panelX + PANEL_WIDTH / 2;
         guiGraphics.drawCenteredString(this.font, this.title, cx, panelY + 4, COLOR_ACCENT);

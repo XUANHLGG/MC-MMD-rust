@@ -13,6 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import org.joml.Matrix4f;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Quaternionf;
@@ -217,9 +218,9 @@ public abstract class AbstractMMDModel implements IMMDModel {
     }
 
     protected static void setupShaderUniforms(ShaderInstance shader, PoseStack deliverStack,
-                                               Vector3f light0Dir, Vector3f light1Dir, int lightMapTex) {
+                                                Vector3f light0Dir, Vector3f light1Dir, int lightMapTex) {
         if (shader.MODEL_VIEW_MATRIX != null)
-            shader.MODEL_VIEW_MATRIX.set(deliverStack.last().pose());
+            shader.MODEL_VIEW_MATRIX.set(computeModelViewMatrix(deliverStack));
         if (shader.PROJECTION_MATRIX != null)
             shader.PROJECTION_MATRIX.set(RenderSystem.getProjectionMatrix());
         if (shader.COLOR_MODULATOR != null)
@@ -254,8 +255,12 @@ public abstract class AbstractMMDModel implements IMMDModel {
         RenderSystem.setShaderTexture(2, lightMapTex);
     }
 
+    public static Matrix4f computeModelViewMatrix(PoseStack deliverStack) {
+        return new Matrix4f(RenderSystem.getModelViewMatrix()).mul(deliverStack.last().pose());
+    }
+
     protected abstract void doRenderModel(Entity entityIn, float entityYaw, float entityPitch,
-                                           Vector3f entityTrans, PoseStack mat, int packedLight);
+                                            Vector3f entityTrans, PoseStack mat, int packedLight);
 
     protected abstract void onUpdate(float deltaTime);
 
