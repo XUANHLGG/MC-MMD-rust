@@ -21,7 +21,7 @@ public class ModelSettingsScreen extends Screen {
     private static final int HEADER_HEIGHT = 28;
     private static final int FOOTER_HEIGHT = 20;
 
-    private static final int COLOR_PANEL_BG = 0xC0101418;
+    private static final int COLOR_PANEL_BG = 0xFF101418;
     private static final int COLOR_PANEL_BORDER = 0xFF2A3A4A;
     private static final int COLOR_ACCENT = 0xFF60A0D0;
     private static final int COLOR_TEXT = 0xFFDDDDDD;
@@ -120,7 +120,6 @@ public class ModelSettingsScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     private void renderHeader(GuiGraphics guiGraphics) {
